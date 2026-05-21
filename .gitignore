@@ -1,0 +1,21 @@
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Python helper artifacts
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local Home Assistant secrets
+secrets.yaml
+*.secret.yaml
+
+# Generated outputs
+*.log
+*.tmp
