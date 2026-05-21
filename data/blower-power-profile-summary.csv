@@ -1,0 +1,7 @@
+metric,value,unit,notes
+running_current_min,1.8,A,Observed Home Assistant smart plug history sample
+running_current_max,1.9,A,Observed Home Assistant smart plug history sample
+running_power_min,180,W,Observed Home Assistant smart plug history sample
+running_power_max,192,W,Observed Home Assistant smart plug history sample
+frequency,60,Hz,Observed entity reported 60 Hz
+interpretation,small sustained load,,Smart plug telemetry may not capture first-cycle inrush
