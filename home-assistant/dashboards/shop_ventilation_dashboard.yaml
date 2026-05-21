@@ -1,0 +1,27 @@
+# Starter Lovelace card fragment. Replace placeholder entities before use.
+
+type: vertical-stack
+cards:
+  - type: entities
+    title: Shop Ventilation
+    entities:
+      - entity: binary_sensor.shop_purge_available
+      - entity: input_boolean.shop_ventilation_manual_disable
+      - entity: input_boolean.shop_ventilation_force_purge
+      - entity: switch.shop_damper
+      - entity: switch.shop_blower
+  - type: entities
+    title: Shop Thermal Layers
+    entities:
+      - entity: sensor.shop_outdoor_temperature
+      - entity: sensor.shop_occupied_zone_temperature
+      - entity: sensor.shop_upper_zone_temperature
+  - type: entities
+    title: Tuning
+    entities:
+      - entity: input_number.shop_purge_outdoor_margin
+      - entity: input_number.shop_purge_stratification_margin
+      - entity: input_number.shop_purge_comfort_threshold
+      - entity: input_number.shop_purge_upper_heat_threshold
+      - entity: input_number.shop_minimum_runtime_minutes
+      - entity: input_number.shop_cooldown_minutes
