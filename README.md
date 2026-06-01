@@ -82,7 +82,7 @@ The YAML file is written as a Home Assistant automation definition. If used insi
 
 These are intentionally not active requirements in the current automation:
 
-- Bay door sensor gate. When added, the intended armed condition is rear window open and bay door closed.
+- Bay door sensor gate. When added, the intended armed condition is: at least one rear window open and bay door closed.
 - Further tuning after more field observations.
 
 ## Repository layout
