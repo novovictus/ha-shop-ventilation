@@ -1,0 +1,186 @@
+alias: Shop Warm Weather Purge
+description: >
+  Runs the damper/fan and blower during warm weather when a rear window is open,
+  the ceiling zone is hotter than the indoor thermometer, outdoor air is useful,
+  or the floor/slab still has heat worth purging.
+
+mode: single
+
+trigger:
+  - platform: state
+    entity_id:
+      - binary_sensor.back_left_window_opening
+      - binary_sensor.back_right_window_opening
+      - sensor.outdoor_thermometer_temperature
+      - sensor.indoor_thermometer_temperature
+      - sensor.ceiling_thermometer_temperature
+      - sensor.floor_thermometer_temperature
+
+condition: []
+
+action:
+  - variables:
+      any_rear_window_open: >
+        {{
+          is_state('binary_sensor.back_left_window_opening', 'on')
+          or is_state('binary_sensor.back_right_window_opening', 'on')
+        }}
+
+      outside_temp: "{{ states('sensor.outdoor_thermometer_temperature') | float(none) }}"
+      indoor_temp: "{{ states('sensor.indoor_thermometer_temperature') | float(none) }}"
+      ceiling_temp: "{{ states('sensor.ceiling_thermometer_temperature') | float(none) }}"
+      floor_temp: "{{ states('sensor.floor_thermometer_temperature') | float(none) }}"
+
+      ceiling_delta: >
+        {% if ceiling_temp is not none and indoor_temp is not none %}
+          {{ ceiling_temp - indoor_temp }}
+        {% else %}
+          {{ none }}
+        {% endif %}
+
+      floor_delta: >
+        {% if floor_temp is not none and outside_temp is not none %}
+          {{ floor_temp - outside_temp }}
+        {% else %}
+          {{ none }}
+        {% endif %}
+
+      sensors_valid: >
+        {{
+          outside_temp is not none
+          and indoor_temp is not none
+          and ceiling_temp is not none
+          and floor_temp is not none
+          and ceiling_delta is not none
+          and floor_delta is not none
+        }}
+
+      ceiling_hot_start: 6
+      ceiling_hot_stop: 3
+
+      floor_purge_start: 3
+      floor_purge_stop: 1
+
+      outside_useful_on: >
+        {{
+          sensors_valid
+          and outside_temp <= indoor_temp + 2
+        }}
+
+      outside_useful_off: >
+        {{
+          sensors_valid
+          and outside_temp >= indoor_temp + 3
+        }}
+
+      outside_floor_useful: >
+        {{
+          sensors_valid
+          and outside_temp <= indoor_temp - 2
+        }}
+
+      ceiling_hot: >
+        {{
+          sensors_valid
+          and ceiling_delta >= ceiling_hot_start
+        }}
+
+      ceiling_equalized: >
+        {{
+          sensors_valid
+          and ceiling_delta <= ceiling_hot_stop
+        }}
+
+      floor_warm: >
+        {{
+          sensors_valid
+          and floor_delta >= floor_purge_start
+        }}
+
+      floor_equalized: >
+        {{
+          sensors_valid
+          and floor_delta <= floor_purge_stop
+        }}
+
+      floor_pass_active: >
+        {{
+          any_rear_window_open
+          and ceiling_equalized
+          and floor_warm
+          and outside_floor_useful
+        }}
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ not any_rear_window_open or not sensors_valid }}
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id:
+                - switch.damper_switch
+                - switch.blower_switch
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                any_rear_window_open
+                and ceiling_hot
+                and outside_useful_on
+              }}
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id:
+                - switch.damper_switch
+                - switch.blower_switch
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                any_rear_window_open
+                and ceiling_hot
+                and not outside_useful_on
+              }}
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: switch.damper_switch
+          - service: switch.turn_on
+            target:
+              entity_id: switch.blower_switch
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ floor_pass_active }}
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: switch.damper_switch
+          - service: switch.turn_off
+            target:
+              entity_id: switch.blower_switch
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                any_rear_window_open
+                and ceiling_equalized
+                and (
+                  floor_equalized
+                  or not outside_floor_useful
+                  or outside_useful_off
+                )
+              }}
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id:
+                - switch.damper_switch
+                - switch.blower_switch
