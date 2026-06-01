@@ -8,6 +8,14 @@ The goal is to remove useful heat from the shop when a human has intentionally o
 
 This is not a comfort thermostat. It is an observational thermal purge process for a shop with stratified heat and slab heat storage.
 
+Opening either rear window is treated as human permission to run the purge process. It does not mean the shop is uncomfortable, and the automation should not infer comfort intent from the indoor thermometer alone.
+
+## Initial field observation
+
+An initial warm-weather test showed strong stratification. The ceiling sensor dropped from roughly 95°F to roughly 72.5°F over the evening, while the floor/slab sensor moved only about 1.5°F.
+
+This supports treating the ceiling zone as the fast heat reservoir and the floor/slab as a slower secondary target. The current process therefore prioritizes ceiling purge first, with floor pass treated as secondary and observational.
+
 ## Entity list
 
 Inputs:
@@ -120,13 +128,32 @@ Action:
 - Turn off `switch.damper_switch`.
 - Turn off `switch.blower_switch`.
 
-## Known future lockouts
+## Current non-goals
 
-These are known additions, but they are not active requirements in the current automation:
+- Do not run based only on indoor thermometer comfort.
+- Do not automatically decide that the shop needs AC.
+- Do not use bay door state until that sensor/interlock is intentionally added.
+- Do not treat the floor pass as proven optimal yet.
 
-- Bay door sensor.
-- Rain lockout.
-- AC active lockout.
+## YAML usage
+
+The YAML file is written as a Home Assistant automation definition. If used inside a package file, wrap it under `automation:`.
+
+## Future bay door gate
+
+When the bay door sensor is added, the intended armed condition is:
+
+```text
+armed =
+  any_rear_window_open
+  AND bay_door_closed
+```
+
+Until then, rear window state alone is the manual arming signal.
+
+## Sensor placement
+
+Sensor placement matters. The outdoor reference should be shaded and not heat-soaked by the rear wall or upper window area. The ceiling sensor should measure upper-air temperature, not roof or wall surface temperature. The floor/slab sensor is slow-moving and should not be treated like an occupied-zone comfort sensor.
 
 ## Notes
 
