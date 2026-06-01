@@ -10,6 +10,10 @@ The current process is intentionally simple and observational. A rear window ope
 
 Initial field-tested warm-weather process. The current YAML is being held deliberately simple so real usage can expose bugs, bad assumptions, and tuning needs before adding more lockouts or state-machine complexity.
 
+## Initial field observation
+
+An initial warm-weather test showed strong stratification: the ceiling zone cooled substantially over the evening while the floor/slab sensor moved only slightly. That observation supports the current ceiling-first purge model, with the floor pass treated as a slower secondary stage. See `docs/warm-weather-process.md` for the detailed field-process notes.
+
 ## System goals
 
 - Remove trapped high-bay heat when outdoor air is favorable.
@@ -62,16 +66,23 @@ DONE
 ## Current implementation
 
 - `home-assistant/shop-warm-weather-purge.yaml` contains the current warm-weather purge automation.
-- `docs/warm-weather-process.md` documents the operating model, derived values, thresholds, and future lockouts.
+- `docs/warm-weather-process.md` documents the operating model, derived values, thresholds, field observations, and control boundaries.
 - `docs/entity-map.md` records the current entity IDs and historical renamed prefixes.
+
+The YAML file is written as a Home Assistant automation definition. If used inside a package file, wrap it under `automation:`.
+
+## Current non-goals
+
+- Do not run based only on indoor thermometer comfort.
+- Do not automatically decide that the shop needs AC.
+- Do not use bay door state until that sensor/interlock is intentionally added.
+- Do not treat the floor pass as proven optimal yet.
 
 ## Known future work
 
 These are intentionally not active requirements in the current automation:
 
-- Bay door sensor lockout or bay-door-aware purge behavior.
-- Rain lockout.
-- AC active lockout.
+- Bay door sensor gate. When added, the intended armed condition is: at least one rear window open and bay door closed.
 - Further tuning after more field observations.
 
 ## Repository layout
