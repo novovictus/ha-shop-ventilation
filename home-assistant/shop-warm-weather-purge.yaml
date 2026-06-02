@@ -1,16 +1,23 @@
-alias: Shop Warm Weather Purge
+alias: Shop Night Purge
 description: >
-  Runs the damper/fan and blower during warm weather when a rear window is open,
-  the ceiling zone is hotter than the indoor thermometer, outdoor air is useful,
-  or the floor/slab still has heat worth purging.
+  Runs short bounded night purge cycles and shuts off on occupancy/manual-use
+  or cold-safety signals.
 
 mode: single
+max_exceeded: silent
 
 trigger:
+  - platform: time
+    at: "20:30:00"
+
+  - platform: time
+    at: "06:30:00"
+
   - platform: state
     entity_id:
       - binary_sensor.back_left_window_opening
       - binary_sensor.back_right_window_opening
+      - binary_sensor.bay_door_opening
       - sensor.outdoor_thermometer_temperature
       - sensor.indoor_thermometer_temperature
       - sensor.ceiling_thermometer_temperature
@@ -20,117 +27,53 @@ condition: []
 
 action:
   - variables:
-      any_rear_window_open: >
+      outdoor: "{{ states('sensor.outdoor_thermometer_temperature') | float(none) }}"
+      indoor: "{{ states('sensor.indoor_thermometer_temperature') | float(none) }}"
+      ceiling: "{{ states('sensor.ceiling_thermometer_temperature') | float(none) }}"
+      floor: "{{ states('sensor.floor_thermometer_temperature') | float(none) }}"
+
+      within_purge_time: >
         {{
-          is_state('binary_sensor.back_left_window_opening', 'on')
-          or is_state('binary_sensor.back_right_window_opening', 'on')
+          now().strftime('%H:%M:%S') >= '20:30:00'
+          or now().strftime('%H:%M:%S') < '06:30:00'
         }}
 
-      outside_temp: "{{ states('sensor.outdoor_thermometer_temperature') | float(none) }}"
-      indoor_temp: "{{ states('sensor.indoor_thermometer_temperature') | float(none) }}"
-      ceiling_temp: "{{ states('sensor.ceiling_thermometer_temperature') | float(none) }}"
-      floor_temp: "{{ states('sensor.floor_thermometer_temperature') | float(none) }}"
-
-      ceiling_delta: >
-        {% if ceiling_temp is not none and indoor_temp is not none %}
-          {{ ceiling_temp - indoor_temp }}
-        {% else %}
-          {{ none }}
-        {% endif %}
-
-      floor_delta: >
-        {% if floor_temp is not none and outside_temp is not none %}
-          {{ floor_temp - outside_temp }}
-        {% else %}
-          {{ none }}
-        {% endif %}
+      bay_closed: "{{ is_state('binary_sensor.bay_door_opening', 'off') }}"
+      left_window_open: "{{ is_state('binary_sensor.back_left_window_opening', 'on') }}"
+      right_window_open: "{{ is_state('binary_sensor.back_right_window_opening', 'on') }}"
 
       sensors_valid: >
         {{
-          outside_temp is not none
-          and indoor_temp is not none
-          and ceiling_temp is not none
-          and floor_temp is not none
-          and ceiling_delta is not none
-          and floor_delta is not none
+          outdoor is not none
+          and indoor is not none
+          and ceiling is not none
+          and floor is not none
         }}
 
-      ceiling_hot_start: 6
-      ceiling_hot_stop: 3
-
-      floor_purge_start: 3
-      floor_purge_stop: 1
-
-      outside_useful_on: >
+      thermal_start_ok: >
         {{
           sensors_valid
-          and outside_temp <= indoor_temp + 2
+          and outdoor > 50
+          and indoor > 50
+          and floor > 50
+          and ceiling >= floor + 5
+          and outdoor <= ceiling - 5
+          and outdoor <= indoor + 1
         }}
 
-      outside_useful_off: >
+      can_start_purge: >
         {{
-          sensors_valid
-          and outside_temp >= indoor_temp + 3
-        }}
-
-      outside_floor_useful: >
-        {{
-          sensors_valid
-          and outside_temp <= indoor_temp - 2
-        }}
-
-      ceiling_hot: >
-        {{
-          sensors_valid
-          and ceiling_delta >= ceiling_hot_start
-        }}
-
-      ceiling_equalized: >
-        {{
-          sensors_valid
-          and ceiling_delta <= ceiling_hot_stop
-        }}
-
-      floor_warm: >
-        {{
-          sensors_valid
-          and floor_delta >= floor_purge_start
-        }}
-
-      floor_equalized: >
-        {{
-          sensors_valid
-          and floor_delta <= floor_purge_stop
-        }}
-
-      floor_pass_active: >
-        {{
-          any_rear_window_open
-          and ceiling_equalized
-          and floor_warm
-          and outside_floor_useful
+          within_purge_time
+          and bay_closed
+          and left_window_open
+          and right_window_open
+          and thermal_start_ok
         }}
 
   - choose:
       - conditions:
           - condition: template
-            value_template: >
-              {{ not any_rear_window_open or not sensors_valid }}
-        sequence:
-          - service: switch.turn_off
-            target:
-              entity_id:
-                - switch.damper_switch
-                - switch.blower_switch
-
-      - conditions:
-          - condition: template
-            value_template: >
-              {{
-                any_rear_window_open
-                and ceiling_hot
-                and outside_useful_on
-              }}
+            value_template: "{{ can_start_purge }}"
         sequence:
           - service: switch.turn_on
             target:
@@ -138,49 +81,52 @@ action:
                 - switch.damper_switch
                 - switch.blower_switch
 
-      - conditions:
-          - condition: template
-            value_template: >
-              {{
-                any_rear_window_open
-                and ceiling_hot
-                and not outside_useful_on
-              }}
-        sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: switch.damper_switch
-          - service: switch.turn_on
-            target:
-              entity_id: switch.blower_switch
+          - wait_for_trigger:
+              - platform: time
+                at: "06:30:00"
 
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ floor_pass_active }}
-        sequence:
-          - service: switch.turn_on
-            target:
-              entity_id: switch.damper_switch
-          - service: switch.turn_off
-            target:
-              entity_id: switch.blower_switch
+              - platform: state
+                entity_id: binary_sensor.bay_door_opening
+                to: "on"
 
-      - conditions:
-          - condition: template
-            value_template: >
-              {{
-                any_rear_window_open
-                and ceiling_equalized
-                and (
-                  floor_equalized
-                  or not outside_floor_useful
-                  or outside_useful_off
-                )
-              }}
-        sequence:
+              - platform: state
+                entity_id:
+                  - binary_sensor.back_left_window_opening
+                  - binary_sensor.back_right_window_opening
+                to: "off"
+
+              - platform: template
+                value_template: >
+                  {% set outdoor = states('sensor.outdoor_thermometer_temperature') | float(none) %}
+                  {% set indoor = states('sensor.indoor_thermometer_temperature') | float(none) %}
+                  {% set ceiling = states('sensor.ceiling_thermometer_temperature') | float(none) %}
+                  {% set floor = states('sensor.floor_thermometer_temperature') | float(none) %}
+                  {{
+                    outdoor is none
+                    or indoor is none
+                    or ceiling is none
+                    or floor is none
+                    or outdoor <= 50
+                    or indoor <= 50
+                    or floor <= 50
+                    or ceiling <= floor
+                    or outdoor >= ceiling
+                    or outdoor > indoor + 1
+                  }}
+            timeout: "00:10:00"
+            continue_on_timeout: true
+
           - service: switch.turn_off
             target:
               entity_id:
                 - switch.damper_switch
                 - switch.blower_switch
+
+          - delay: "01:00:00"
+
+    default:
+      - service: switch.turn_off
+        target:
+          entity_id:
+            - switch.damper_switch
+            - switch.blower_switch
