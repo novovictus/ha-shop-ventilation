@@ -1,0 +1,70 @@
+id: '1780363364986'
+alias: Shop Night Purge
+description: Runs short bounded night purge cycles and shuts off on occupancy/manual-use or cold-safety signals.
+triggers:
+- trigger: time
+  at: '20:30:00'
+- trigger: time
+  at: 06:30:00
+- trigger: state
+  entity_id:
+  - binary_sensor.back_left_window_opening
+  - binary_sensor.back_right_window_opening
+  - binary_sensor.bay_door_opening
+  - sensor.outdoor_thermometer_temperature
+  - sensor.indoor_thermometer_temperature
+  - sensor.ceiling_thermometer_temperature
+  - sensor.floor_thermometer_temperature
+conditions: []
+actions:
+- variables:
+    outdoor: '{{ states(''sensor.outdoor_thermometer_temperature'') | float(none) }}'
+    indoor: '{{ states(''sensor.indoor_thermometer_temperature'') | float(none) }}'
+    ceiling: '{{ states(''sensor.ceiling_thermometer_temperature'') | float(none) }}'
+    floor: '{{ states(''sensor.floor_thermometer_temperature'') | float(none) }}'
+    within_purge_time: "{{\n  now().strftime('%H:%M:%S') >= '20:30:00'\n  or now().strftime('%H:%M:%S') < '06:30:00'\n}}\n"
+    bay_closed: '{{ is_state(''binary_sensor.bay_door_opening'', ''off'') }}'
+    left_window_open: '{{ is_state(''binary_sensor.back_left_window_opening'', ''on'') }}'
+    right_window_open: '{{ is_state(''binary_sensor.back_right_window_opening'', ''on'') }}'
+    sensors_valid: "{{\n  outdoor is not none\n  and indoor is not none\n  and ceiling is not none\n  and floor is not none\n}}\n"
+    thermal_start_ok: "{{\n  sensors_valid\n  and outdoor > 50\n  and indoor > 50\n  and floor > 50\n  and ceiling >= floor + 5\n  and outdoor <= ceiling - 5\n  and outdoor <= indoor + 1\n}}\n"
+    can_start_purge: "{{\n  within_purge_time\n  and bay_closed\n  and left_window_open\n  and right_window_open\n  and thermal_start_ok\n}}\n"
+- choose:
+  - conditions:
+    - condition: template
+      value_template: '{{ can_start_purge }}'
+    sequence:
+    - action: switch.turn_on
+      target:
+        entity_id:
+        - switch.damper_switch
+        - switch.blower_switch
+    - wait_for_trigger:
+      - trigger: time
+        at: 06:30:00
+      - trigger: state
+        entity_id: binary_sensor.bay_door_opening
+        to: 'on'
+      - trigger: state
+        entity_id:
+        - binary_sensor.back_left_window_opening
+        - binary_sensor.back_right_window_opening
+        to: 'off'
+      - trigger: template
+        value_template: "{% set outdoor = states('sensor.outdoor_thermometer_temperature') | float(none) %} {% set indoor = states('sensor.indoor_thermometer_temperature') | float(none) %} {% set ceiling = states('sensor.ceiling_thermometer_temperature') | float(none) %} {% set floor = states('sensor.floor_thermometer_temperature') | float(none) %} {{\n  outdoor is none\n  or indoor is none\n  or ceiling is none\n  or floor is none\n  or outdoor <= 50\n  or indoor <= 50\n  or floor <= 50\n  or ceiling <= floor\n  or outdoor >= ceiling\n  or outdoor > indoor + 1\n}}\n"
+      timeout: 00:10:00
+      continue_on_timeout: true
+    - action: switch.turn_off
+      target:
+        entity_id:
+        - switch.damper_switch
+        - switch.blower_switch
+    - delay: 01:00:00
+  default:
+  - action: switch.turn_off
+    target:
+      entity_id:
+      - switch.damper_switch
+      - switch.blower_switch
+mode: single
+max_exceeded: silent
