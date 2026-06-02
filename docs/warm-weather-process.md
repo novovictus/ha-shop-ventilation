@@ -21,6 +21,12 @@ The previous multi-state warm-weather purge model has been retired for this test
 
 The intent is to run a complete field cycle before adding more interlocks, stale-sensor checks, switch-state triggers, notifications, or state-machine complexity.
 
+## Hardware and entity posture
+
+The control logic is Home Assistant entity based and relay agnostic. It does not assume Shelly hardware or any other specific switch vendor.
+
+The bay door sensor is part of the current control model and is treated as an occupancy/manual-use boundary.
+
 ## Entity list
 
 Inputs:
