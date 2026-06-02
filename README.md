@@ -38,8 +38,10 @@ An active purge stops immediately if 06:30 arrives, the bay door opens, either r
 
 ## Hardware baseline
 
+The control logic is Home Assistant entity based and relay agnostic. It does not assume Shelly hardware.
+
 - Powered damper/fan controlled by Home Assistant as `switch.damper_switch`.
-- Supplemental blower controlled as `switch.blower_switch`.
+- Supplemental blower controlled by Home Assistant as `switch.blower_switch`.
 - Rear window opening sensors:
   - `binary_sensor.back_left_window_opening`
   - `binary_sensor.back_right_window_opening`
@@ -78,6 +80,7 @@ The YAML file is written as a Home Assistant automation definition. If used insi
 - Do not use the indoor thermometer as the main trigger.
 - Do not automatically decide that the shop needs AC.
 - Do not add more recovery/notification logic until the current cycle has been observed.
+- Do not assume a specific relay/switch vendor.
 
 ## Safety boundary
 
