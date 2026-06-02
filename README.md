@@ -8,6 +8,8 @@ The project treats the shop as a thermal-mass problem, not a comfort thermostat.
 
 Current field-cycle test: bounded night purge.
 
+The active Home Assistant implementation is treated as ground truth. This repository now tracks the current `Shop Night Purge` automation rather than the older disabled/retained automations still present locally for posterity.
+
 The earlier multi-mode framing has been retired for this cycle. The current automation is intentionally smaller so one full run can expose real behavior before adding stale-sensor checks, notifications, restart recovery, or more state-machine complexity.
 
 ## Current behavior
@@ -66,7 +68,7 @@ photos/            Placeholders for bench-test and installation photos
 
 ## Current implementation
 
-- `home-assistant/shop-warm-weather-purge.yaml` contains the active field-cycle automation.
+- `home-assistant/shop-night-purge.yaml` contains the active field-cycle automation mirrored from Home Assistant.
 - `docs/warm-weather-process.md` documents the current operating model, boundaries, and accepted edge cases.
 - `docs/entity-map.md` records the Home Assistant entity IDs used by the automation.
 
@@ -81,6 +83,7 @@ The YAML file is written as a Home Assistant automation definition. If used insi
 - Do not automatically decide that the shop needs AC.
 - Do not add more recovery/notification logic until the current cycle has been observed.
 - Do not assume a specific relay/switch vendor.
+- Do not document disabled legacy local automations as current behavior.
 
 ## Safety boundary
 
