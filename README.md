@@ -69,7 +69,7 @@ photos/            Placeholders for bench-test and installation photos
 ## Current implementation
 
 - `home-assistant/shop-night-purge.yaml` contains the active field-cycle automation mirrored from Home Assistant.
-- `docs/warm-weather-process.md` documents the current operating model, boundaries, and accepted edge cases.
+- `docs/night-purge-process.md` documents the current operating model, boundaries, and accepted edge cases.
 - `docs/entity-map.md` records the Home Assistant entity IDs used by the automation.
 
 The YAML file is written as a Home Assistant automation definition. If used inside a package file, wrap it under `automation:`.
