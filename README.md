@@ -12,6 +12,22 @@ The active Home Assistant implementation is treated as ground truth. This reposi
 
 The earlier multi-mode framing has been retired for this cycle. The current automation remains intentionally bounded: short purge cycles, explicit manual preparation, conservative occupancy lockouts, and no attempt to become a full comfort thermostat.
 
+## Active versus reference YAML
+
+The active field-cycle implementation is:
+
+```text
+home-assistant/shop-night-purge.yaml
+```
+
+The package file below is a non-active architectural/starter reference and should not be loaded alongside the active field-cycle automation without reconciling overlapping damper/blower control, helper entities, thresholds, and sequencing assumptions:
+
+```text
+home-assistant/packages/shop_ventilation.yaml
+```
+
+During field testing, the active automation may intentionally differ from older architecture, package, or state-machine notes. When there is a conflict, treat `home-assistant/shop-night-purge.yaml` as ground truth for the current cycle.
+
 ## Current behavior
 
 Purge may start only when all of the following are true:
@@ -90,6 +106,7 @@ photos/            Placeholders for bench-test and installation photos
 - `home-assistant/shop-night-purge.yaml` contains the active field-cycle automation mirrored from Home Assistant.
 - `docs/night-purge-process.md` documents the current operating model, boundaries, and accepted edge cases.
 - `docs/entity-map.md` records the Home Assistant entity IDs used by the automation.
+- `home-assistant/packages/shop_ventilation.yaml` is a non-active starter/reference package and is not current field-cycle ground truth.
 
 The YAML file is written as a Home Assistant automation definition. If used inside a package file, wrap it under `automation:`.
 
