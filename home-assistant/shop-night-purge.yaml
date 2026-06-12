@@ -1,70 +1,259 @@
 id: '1780363364986'
 alias: Shop Night Purge
-description: Runs short bounded night purge cycles and shuts off on occupancy/manual-use or cold-safety signals.
+description: >-
+  Runs short bounded evening/night purge cycles between 18:00 and 06:30 when the
+  shop appears unoccupied, rear windows are open, AC/heat is off, the bay door is
+  closed, outside air is thermally useful, humidity penalty is acceptable, and
+  cold-safety limits are satisfied. Stops once the upper layer is mostly
+  destratified or the useful outdoor/ceiling delta is spent.
 triggers:
-- trigger: time
-  at: '20:30:00'
-- trigger: time
-  at: 06:30:00
-- trigger: state
-  entity_id:
-  - binary_sensor.back_left_window_opening
-  - binary_sensor.back_right_window_opening
-  - binary_sensor.bay_door_opening
-  - sensor.outdoor_thermometer_temperature
-  - sensor.indoor_thermometer_temperature
-  - sensor.ceiling_thermometer_temperature
-  - sensor.floor_thermometer_temperature
+  - trigger: time
+    at: '18:00:00'
+  - trigger: time
+    at: '06:30:00'
+  - trigger: time_pattern
+    minutes: /5
+  - trigger: state
+    entity_id:
+      - switch.ac_heat_switch_switch
+      - binary_sensor.back_left_window_opening
+      - binary_sensor.back_right_window_opening
+      - binary_sensor.bay_door_opening
+      - binary_sensor.door_opening
+      - sensor.outdoor_thermometer_temperature
+      - sensor.outdoor_thermometer_humidity
+      - sensor.indoor_thermometer_temperature
+      - sensor.indoor_thermometer_humidity
+      - sensor.ceiling_thermometer_temperature
+      - sensor.ceiling_thermometer_humidity
+      - sensor.floor_thermometer_temperature
+      - sensor.floor_thermometer_humidity
 conditions: []
 actions:
-- variables:
-    outdoor: '{{ states(''sensor.outdoor_thermometer_temperature'') | float(none) }}'
-    indoor: '{{ states(''sensor.indoor_thermometer_temperature'') | float(none) }}'
-    ceiling: '{{ states(''sensor.ceiling_thermometer_temperature'') | float(none) }}'
-    floor: '{{ states(''sensor.floor_thermometer_temperature'') | float(none) }}'
-    within_purge_time: "{{\n  now().strftime('%H:%M:%S') >= '20:30:00'\n  or now().strftime('%H:%M:%S') < '06:30:00'\n}}\n"
-    bay_closed: '{{ is_state(''binary_sensor.bay_door_opening'', ''off'') }}'
-    left_window_open: '{{ is_state(''binary_sensor.back_left_window_opening'', ''on'') }}'
-    right_window_open: '{{ is_state(''binary_sensor.back_right_window_opening'', ''on'') }}'
-    sensors_valid: "{{\n  outdoor is not none\n  and indoor is not none\n  and ceiling is not none\n  and floor is not none\n}}\n"
-    thermal_start_ok: "{{\n  sensors_valid\n  and outdoor > 50\n  and indoor > 50\n  and floor > 50\n  and ceiling >= floor + 5\n  and outdoor <= ceiling - 5\n  and outdoor <= indoor + 1\n}}\n"
-    can_start_purge: "{{\n  within_purge_time\n  and bay_closed\n  and left_window_open\n  and right_window_open\n  and thermal_start_ok\n}}\n"
-- choose:
-  - conditions:
-    - condition: template
-      value_template: '{{ can_start_purge }}'
-    sequence:
-    - action: switch.turn_on
-      target:
-        entity_id:
-        - switch.damper_switch
-        - switch.blower_switch
-    - wait_for_trigger:
-      - trigger: time
-        at: 06:30:00
-      - trigger: state
-        entity_id: binary_sensor.bay_door_opening
-        to: 'on'
-      - trigger: state
-        entity_id:
-        - binary_sensor.back_left_window_opening
-        - binary_sensor.back_right_window_opening
-        to: 'off'
-      - trigger: template
-        value_template: "{% set outdoor = states('sensor.outdoor_thermometer_temperature') | float(none) %} {% set indoor = states('sensor.indoor_thermometer_temperature') | float(none) %} {% set ceiling = states('sensor.ceiling_thermometer_temperature') | float(none) %} {% set floor = states('sensor.floor_thermometer_temperature') | float(none) %} {{\n  outdoor is none\n  or indoor is none\n  or ceiling is none\n  or floor is none\n  or outdoor <= 50\n  or indoor <= 50\n  or floor <= 50\n  or ceiling <= floor\n  or outdoor >= ceiling\n  or outdoor > indoor + 1\n}}\n"
-      timeout: 00:10:00
-      continue_on_timeout: true
-    - action: switch.turn_off
-      target:
-        entity_id:
-        - switch.damper_switch
-        - switch.blower_switch
-    - delay: 01:00:00
-  default:
-  - action: switch.turn_off
-    target:
-      entity_id:
-      - switch.damper_switch
-      - switch.blower_switch
+  - variables:
+      outdoor: "{{ states('sensor.outdoor_thermometer_temperature') | float(none) }}"
+      outdoor_humidity: "{{ states('sensor.outdoor_thermometer_humidity') | float(none) }}"
+      indoor: "{{ states('sensor.indoor_thermometer_temperature') | float(none) }}"
+      indoor_humidity: "{{ states('sensor.indoor_thermometer_humidity') | float(none) }}"
+      ceiling: "{{ states('sensor.ceiling_thermometer_temperature') | float(none) }}"
+      ceiling_humidity: "{{ states('sensor.ceiling_thermometer_humidity') | float(none) }}"
+      floor: "{{ states('sensor.floor_thermometer_temperature') | float(none) }}"
+      floor_humidity: "{{ states('sensor.floor_thermometer_humidity') | float(none) }}"
+      within_purge_time: |
+        {{
+          now().strftime('%H:%M:%S') >= '18:00:00'
+          or now().strftime('%H:%M:%S') < '06:30:00'
+        }}
+      ac_heat_off: "{{ is_state('switch.ac_heat_switch_switch', 'off') }}"
+      bay_closed: "{{ is_state('binary_sensor.bay_door_opening', 'off') }}"
+      left_window_open: "{{ is_state('binary_sensor.back_left_window_opening', 'on') }}"
+      right_window_open: "{{ is_state('binary_sensor.back_right_window_opening', 'on') }}"
+      side_door_recent: |
+        {{
+          (now() - states.binary_sensor.door_opening.last_changed).total_seconds() < 3600
+        }}
+      sensors_valid: |
+        {{
+          outdoor is not none
+          and outdoor_humidity is not none
+          and indoor is not none
+          and indoor_humidity is not none
+          and ceiling is not none
+          and ceiling_humidity is not none
+          and floor is not none
+          and floor_humidity is not none
+        }}
+      outdoor_dew_point: |
+        {% if outdoor is not none and outdoor_humidity is not none %}
+          {% set t_c = (outdoor - 32) * 5 / 9 %}
+          {% set dp_c = t_c - ((100 - outdoor_humidity) / 5) %}
+          {{ ((dp_c * 9 / 5) + 32) | round(1) }}
+        {% else %}
+          {{ none }}
+        {% endif %}
+      indoor_dew_point: |
+        {% if indoor is not none and indoor_humidity is not none %}
+          {% set t_c = (indoor - 32) * 5 / 9 %}
+          {% set dp_c = t_c - ((100 - indoor_humidity) / 5) %}
+          {{ ((dp_c * 9 / 5) + 32) | round(1) }}
+        {% else %}
+          {{ none }}
+        {% endif %}
+      floor_dew_point: |
+        {% if floor is not none and floor_humidity is not none %}
+          {% set t_c = (floor - 32) * 5 / 9 %}
+          {% set dp_c = t_c - ((100 - floor_humidity) / 5) %}
+          {{ ((dp_c * 9 / 5) + 32) | round(1) }}
+        {% else %}
+          {{ none }}
+        {% endif %}
+      humidity_valid: |
+        {{
+          outdoor_dew_point is not none
+          and indoor_dew_point is not none
+          and floor_dew_point is not none
+        }}
+      reference_dew_point: |
+        {% if indoor_dew_point is not none and floor_dew_point is not none %}
+          {{ [indoor_dew_point, floor_dew_point] | max }}
+        {% else %}
+          {{ none }}
+        {% endif %}
+      humidity_good: |
+        {{
+          humidity_valid
+          and reference_dew_point is not none
+          and outdoor_dew_point <= reference_dew_point + 2
+        }}
+      humidity_marginal: |
+        {{
+          humidity_valid
+          and reference_dew_point is not none
+          and outdoor_dew_point <= reference_dew_point + 6
+        }}
+      heat_delta_normal: |
+        {{
+          sensors_valid
+          and ceiling >= floor + 10
+          and outdoor <= ceiling - 10
+        }}
+      heat_delta_extreme: |
+        {{
+          sensors_valid
+          and ceiling >= floor + 15
+          and outdoor <= ceiling - 15
+        }}
+      thermal_start_ok: |
+        {{
+          sensors_valid
+          and humidity_valid
+          and outdoor > 50
+          and indoor > 50
+          and floor > 50
+          and outdoor <= indoor + 1
+          and (
+            (
+              heat_delta_normal
+              and humidity_good
+            )
+            or (
+              heat_delta_extreme
+              and humidity_marginal
+            )
+          )
+        }}
+      can_start_purge: |
+        {{
+          within_purge_time
+          and ac_heat_off
+          and bay_closed
+          and not side_door_recent
+          and left_window_open
+          and right_window_open
+          and thermal_start_ok
+        }}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: '{{ can_start_purge }}'
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id:
+                - switch.damper_switch
+                - switch.blower_switch
+          - wait_for_trigger:
+              - trigger: time
+                at: '06:30:00'
+              - trigger: state
+                entity_id: switch.ac_heat_switch_switch
+                to: 'on'
+              - trigger: state
+                entity_id: binary_sensor.bay_door_opening
+                to: 'on'
+              - trigger: state
+                entity_id: binary_sensor.door_opening
+              - trigger: state
+                entity_id:
+                  - binary_sensor.back_left_window_opening
+                  - binary_sensor.back_right_window_opening
+                to: 'off'
+              - trigger: template
+                value_template: >
+                  {% set outdoor = states('sensor.outdoor_thermometer_temperature') | float(none) %}
+                  {% set outdoor_humidity = states('sensor.outdoor_thermometer_humidity') | float(none) %}
+                  {% set indoor = states('sensor.indoor_thermometer_temperature') | float(none) %}
+                  {% set indoor_humidity = states('sensor.indoor_thermometer_humidity') | float(none) %}
+                  {% set floor = states('sensor.floor_thermometer_temperature') | float(none) %}
+                  {% set floor_humidity = states('sensor.floor_thermometer_humidity') | float(none) %}
+                  {% set ceiling = states('sensor.ceiling_thermometer_temperature') | float(none) %}
+
+                  {% set outdoor_dp = none %}
+                  {% set indoor_dp = none %}
+                  {% set floor_dp = none %}
+                  {% set reference_dp = none %}
+
+                  {% if outdoor is not none and outdoor_humidity is not none %}
+                    {% set t_c = (outdoor - 32) * 5 / 9 %}
+                    {% set dp_c = t_c - ((100 - outdoor_humidity) / 5) %}
+                    {% set outdoor_dp = ((dp_c * 9 / 5) + 32) %}
+                  {% endif %}
+
+                  {% if indoor is not none and indoor_humidity is not none %}
+                    {% set t_c = (indoor - 32) * 5 / 9 %}
+                    {% set dp_c = t_c - ((100 - indoor_humidity) / 5) %}
+                    {% set indoor_dp = ((dp_c * 9 / 5) + 32) %}
+                  {% endif %}
+
+                  {% if floor is not none and floor_humidity is not none %}
+                    {% set t_c = (floor - 32) * 5 / 9 %}
+                    {% set dp_c = t_c - ((100 - floor_humidity) / 5) %}
+                    {% set floor_dp = ((dp_c * 9 / 5) + 32) %}
+                  {% endif %}
+
+                  {% if indoor_dp is not none and floor_dp is not none %}
+                    {% set reference_dp = [indoor_dp, floor_dp] | max %}
+                  {% endif %}
+
+                  {{
+                    outdoor is none
+                    or outdoor_humidity is none
+                    or indoor is none
+                    or indoor_humidity is none
+                    or floor is none
+                    or floor_humidity is none
+                    or ceiling is none
+                    or outdoor_dp is none
+                    or reference_dp is none
+
+                    or outdoor <= 50
+                    or indoor <= 50
+                    or floor <= 50
+
+                    or ceiling <= floor + 3
+                    or ceiling <= indoor + 3
+                    or outdoor >= ceiling - 3
+
+                    or outdoor > indoor + 1
+
+                    or (
+                      outdoor_dp > reference_dp + 6
+                      and ceiling < floor + 15
+                    )
+                  }}
+            timeout: '00:10:00'
+            continue_on_timeout: true
+          - action: switch.turn_off
+            target:
+              entity_id:
+                - switch.damper_switch
+                - switch.blower_switch
+          - delay: '01:00:00'
+    default:
+      - action: switch.turn_off
+        target:
+          entity_id:
+            - switch.damper_switch
+            - switch.blower_switch
 mode: single
 max_exceeded: silent
