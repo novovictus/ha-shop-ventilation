@@ -1,225 +1,162 @@
-# Shop Night Purge Process
+# Shop Night Heat Extraction Process
 
 ## Purpose
 
-This document describes the current field-cycle process for the high-ceiling shop purge automation. The active Home Assistant implementation is the ground truth. The repository mirrors the active `Shop Night Purge` automation and does not treat older disabled local automations as current behavior.
+This document describes the current v1 field-cycle process for the shop heat-extraction automation.
 
-The goal is to remove useful evening and overnight ceiling heat only when the shop has been manually prepared for purge and appears unoccupied. The process is intentionally conservative: if AC/heat turns on, the bay door opens, the standard side door changes state, either rear window closes, the useful thermal advantage disappears, or cold-safety limits are reached, the automation shuts the purge devices off.
+The goal is to reduce hot mornings after high heat-load days. The automation uses the damper/fan only when outdoor air is meaningfully cooler than the shop floor and outdoor humidity is within the v1 guardrail.
 
-This is not a comfort thermostat. It is an observational thermal purge process for a shop with stratified heat, slab heat storage, passive high-window bleed, humidity-sensitive occupied comfort, and daylight solar gain that dominates daytime behavior.
+This is not a comfort thermostat. It is a nighttime thermal-state safeguard for a shop with slab heat storage, stratified ceiling heat, passive equalization behavior, manual window operation, and daytime AC use.
 
-## Current field-cycle posture
+## Current posture
 
-The previous multi-state warm-weather purge model has been retired for this test cycle. The current automation is a bounded evening/night purge:
+The previous rear-window, supplemental-blower, ceiling-delta, and dew-point purge model has been retired for this test cycle.
 
-- No blower-only mode.
-- No floor-pass mode.
-- No damper-only operation.
-- No run based solely on indoor comfort.
-- No occupied meeting-mode comfort control.
-- No sunrise trigger; the 06:30 cutoff is the hard morning boundary.
-- Evening start is allowed at 18:00, but only with stronger thermal and humidity guardrails.
+Current v1 characteristics:
 
-The intent is to observe field behavior before adding stale-sensor checks, restart recovery, manual switch-on correction, notifications, or more state-machine complexity.
+- Damper/fan only.
+- No supplemental blower.
+- No window automation.
+- No side-door logic.
+- No ceiling-triggered purge stage.
+- No dew-point calculation.
+- No maximum runtime.
+- No AC automation.
 
-## Hardware and entity posture
+## Active entities
 
-The control logic is Home Assistant entity based and relay agnostic. It does not assume Shelly hardware or any other specific switch vendor.
-
-The bay door sensor is treated as a strong occupancy/manual-use boundary. The AC/heat switch is treated as a strong occupied-comfort signal. The standard side door is treated as recent occupancy when it has changed state within the last hour.
-
-Rear windows are not treated as proof of occupancy. In the current operating model, open rear windows are interpreted as manual preparation for passive or mechanical purge, provided the stronger occupied/recently occupied signals are absent.
-
-## Entity list
-
-Inputs:
+Inputs used by v1:
 
 - `switch.ac_heat_switch_switch`
-- `binary_sensor.back_left_window_opening`
-- `binary_sensor.back_right_window_opening`
 - `binary_sensor.bay_door_opening`
-- `binary_sensor.door_opening`
 - `sensor.outdoor_thermometer_temperature`
 - `sensor.outdoor_thermometer_humidity`
+- `sensor.floor_thermometer_temperature`
+
+Output used by v1:
+
+- `switch.damper_switch`
+
+Observed but not active in v1:
+
+- `binary_sensor.back_left_window_opening`
+- `binary_sensor.back_right_window_opening`
+- `binary_sensor.door_opening`
 - `sensor.indoor_thermometer_temperature`
 - `sensor.indoor_thermometer_humidity`
 - `sensor.ceiling_thermometer_temperature`
 - `sensor.ceiling_thermometer_humidity`
-- `sensor.floor_thermometer_temperature`
 - `sensor.floor_thermometer_humidity`
-
-Outputs:
-
-- `switch.damper_switch`
 - `switch.blower_switch`
 
 ## Operating window
 
-Purge is allowed only between:
+Heat extraction is allowed only between:
 
 ```text
-18:00 to 06:30
+sunset + 20 minutes to sunrise
 ```
 
-The automation may still evaluate outside that window when an input changes, but it will not start a purge outside the allowed window. At 06:30 it forces both purge devices off.
+The automation evaluates at sunset plus 20 minutes and every 20 minutes overnight.
 
 ## Start requirements
 
-A purge cycle may start only when all of the following are true:
+A heat-extraction run may start only when all of the following are true:
 
-- Time is within the allowed purge window.
+- Time is after sunset plus 20 minutes and before sunrise.
+- Damper/fan switch is off.
 - AC/heat switch is off.
 - Bay door is closed.
-- Standard side door has not changed state within the last hour.
-- Left rear window is open.
-- Right rear window is open.
-- Outdoor, indoor, ceiling, and floor temperature and humidity sensors are valid.
-- Outdoor temperature is above 50°F.
-- Indoor temperature is above 50°F.
-- Floor temperature is above 50°F.
-- Outdoor temperature is not more than 1°F warmer than the indoor occupied-zone thermometer.
+- Outdoor temperature is at least 3°F below the floor temperature.
+- Outdoor RH is below 85%.
 
-Normal purge case:
+Temperature rule:
 
-- Ceiling temperature is at least 10°F warmer than floor temperature.
-- Outdoor temperature is at least 10°F cooler than ceiling temperature.
-- Outdoor dew point is no more than 2°F above the indoor/floor reference dew point.
+```text
+outdoor <= floor - 3°F
+```
 
-Extreme heat-purge case:
-
-- Ceiling temperature is at least 15°F warmer than floor temperature.
-- Outdoor temperature is at least 15°F cooler than ceiling temperature.
-- Outdoor dew point is no more than 6°F above the indoor/floor reference dew point.
-
-The automation uses a simple approximate dew point calculation from temperature and relative humidity. It is intended as a practical purge/no-purge guardrail, not a laboratory psychrometric calculation.
-
-## Cycle behavior
+## Run behavior
 
 When start requirements are met:
 
 ```text
-damper on
-blower on
-run up to 10 minutes
-damper off
-blower off
-rest 60 minutes
+damper/fan on
 ```
 
-`mode: single` is intentional for this field cycle. During the 60-minute rest, repeated sensor updates are ignored so the cooldown is preserved. The purge devices are already off during the cooldown.
+There is no maximum runtime in v1. If favorable conditions persist all night, the system may continue running. This is intentional for the heatwave data-collection cycle.
 
-## Immediate stop conditions
+## Stop conditions
 
-An active purge stops immediately when any of the following occur:
+An active extraction run stops when any of the following are true:
 
-- 06:30 arrives.
+- Sunrise occurs.
 - AC/heat switch turns on.
 - Bay door opens.
-- Standard side door changes state.
-- Either rear window closes.
-- Any required temperature or humidity sensor becomes invalid.
-- Outdoor temperature is at or below 50°F.
-- Indoor temperature is at or below 50°F.
-- Floor temperature is at or below 50°F.
-- Ceiling temperature is within 3°F of floor temperature.
-- Ceiling temperature is within 3°F of indoor temperature.
-- Outdoor temperature is no longer at least 3°F cooler than ceiling temperature.
-- Outdoor temperature rises more than 1°F above the indoor occupied-zone thermometer.
-- Outdoor dew point is more than 6°F above the indoor/floor reference dew point and the ceiling/floor delta is no longer extreme.
-- The 10-minute run timeout expires.
+- Outdoor temperature is no longer usefully cooler than the floor.
+- Outdoor RH reaches the 85% cutoff.
 
-## Occupancy and manual-use boundary
-
-For this cycle:
+Temperature stop rule:
 
 ```text
-bay door open = occupied or manual-use mode
-AC/heat on = occupied comfort mode
-side door changed within 1 hour = occupied or recently occupied
-both rear windows open = purge permission, not proof of unoccupancy
-occupied/manual-use mode = purge off
+outdoor >= floor - 1°F
 ```
 
-The side-door interpretation is intentionally conservative. A standard side-door change usually means entry, exit, dog movement, loading, shutdown, or near-term human activity. That suppresses mechanical purge until the one-hour recent-occupancy window expires.
-
-## Field-observation model
-
-Observed shop behavior from the current warm/humid test day:
-
-- Closed shop plus AC can cool and dry the occupied work area even while the ceiling layer remains hot.
-- Turning AC off for video-call noise allows the occupied-zone dry/cool bubble to collapse quickly under hot-soaked conditions.
-- Blower operation during occupied humid conditions can raise work-area humidity without meaningfully stopping upper-zone temperature rise.
-- Rear-window opening can reduce upper-zone temperature but may degrade work-area comfort if outdoor dew point is high.
-- A standard side-door opening is a small operational disturbance, not equivalent to a bay-door ventilation event.
-- When unoccupied, open rear windows and bounded fan/damper purge may be useful to dump stored upper heat, but only until the upper layer is mostly destratified.
-
-The practical rule is:
+Humidity stop rule:
 
 ```text
-Occupied mode: protect the dry work-area bubble.
-Unoccupied evening/night mode: remove stored upper heat, then stop.
+outdoor RH >= 85%
 ```
 
-## Humidity and dew point role
+## Accepted non-start condition
 
-Relative humidity alone is not used as the decision metric because cooler outdoor air can show high RH while still carrying a different moisture load than warmer indoor air. The current automation estimates dew point from temperature and RH, then compares outdoor dew point against the indoor/floor reference.
+Non-operation is a valid result.
 
-The humidity guardrail is deliberately asymmetric:
+If the shop passively equalizes, the outdoor/floor delta may never justify running the fan. That is not a failure. It means the building handled the heat dump without additional electricity.
 
-- Normal thermal opportunity requires outdoor dew point to be no more than 2°F above the indoor/floor reference.
-- Extreme ceiling heat allows a larger humidity penalty, up to 6°F above the reference.
-- Once the heat delta is mostly consumed, the automation stops instead of continuing to import wet air.
+## Field model
 
-## Cold-safety boundary
-
-50°F is the current cold-safety floor for this cycle:
+Practical rule:
 
 ```text
-outdoor <= 50°F = block or stop purge
-indoor <= 50°F = block or stop purge
-floor <= 50°F = block or stop purge
+Daytime: protect the work-area AC condition.
+Night: extract stored floor/slab heat only when outdoor conditions are favorable.
+Passive success: if the shop equalizes on its own, do nothing.
 ```
 
-This is intentionally conservative. If the shop is at or below that boundary, the automation should not mechanically accelerate cooling if windows were left open.
+## Humidity role
 
-## Indoor sensor role
-
-The indoor thermometer is not the primary purge trigger. It is used as a guardrail:
+V1 uses relative humidity as a crude guardrail because dew point is not implemented in the deployed UI automations.
 
 ```text
-if outdoor > indoor + 1°F, do not start or continue purge
+outdoor RH < 85% = allow start
+outdoor RH >= 85% = stop or block
 ```
 
-This prevents the automation from chasing a hot ceiling layer while importing outdoor air that is already warmer than the occupied zone.
+Dew point logic is deferred until after the heatwave test.
 
 ## Floor sensor role
 
-The floor sensor is used for three checks:
+The floor sensor is the main thermal reference for v1.
 
-- Start only if the ceiling is substantially warmer than the floor.
-- Stop when the ceiling is mostly destratified relative to the floor.
-- Block or stop purge if the floor is at or below 50°F.
+- Start only if outdoor air is at least 3°F cooler than the floor.
+- Stop once outdoor air is within 1°F below the floor.
+- Do not chase ceiling temperature in v1.
 
-The floor sensor is not currently used for a separate slab-purge stage.
+## Accepted edge cases
 
-## Accepted edge cases for this cycle
-
-- Manual switch-on correction is not yet included beyond the automation's normal default turn-off path.
+- Manual switch-on correction is limited to normal stop automation behavior.
 - Home Assistant restart recovery is not yet included.
 - Stale sensor detection is not yet included.
-- Notifications for open windows in cold conditions are not yet included.
-- Cooldown triggers are ignored while `mode: single` is delaying, which is acceptable because the devices are already off during cooldown.
-
-These are intentionally held until after field observation of the current humidity-aware cycle.
+- Dew point calculation is not yet included.
+- Occupancy or motion detection is not yet included.
+- AC automation is not yet included.
+- The time-pattern check may start or stop on a single 20-minute sample rather than a continuous 20-minute verified condition.
 
 ## YAML usage
 
-The YAML file is written as a Home Assistant automation definition. If used inside a package file, wrap it under `automation:`.
+The YAML file is written as two Home Assistant automation definitions stored together for repository tracking. If importing through the Home Assistant Automation UI, paste the start and stop automations separately.
 
 ## Sensor placement
 
-Sensor placement matters. The outdoor reference should be shaded and not heat-soaked by the rear wall or upper window area. The ceiling sensor should measure upper-air temperature, not roof or wall surface temperature. The floor/slab sensor is slow-moving and should not be treated like an occupied-zone comfort sensor.
-
-## Safety boundary
-
-This repository documents architecture, control logic, sensor placement, and Home Assistant implementation. It is not an electrical wiring guide. Mains-voltage work should be designed, installed, and verified according to local code by a qualified electrician.
+The outdoor thermometer is mounted high under an eave. Its reading may lag or differ from public weather forecasts, especially around sunset and after solar loading. The automation uses the observed local sensor rather than forecast values.
