@@ -76,6 +76,7 @@ The control logic is Home Assistant entity based and relay agnostic. It does not
 Active v1 output:
 
 - Powered damper/fan controlled by Home Assistant as `switch.damper_switch`.
+- Physical damper/fan build details are documented in `docs/damper-install.md`.
 
 Available but not used in v1:
 
@@ -110,7 +111,7 @@ Observed but not active v1 control inputs:
 ## Repository layout
 
 ```text
-docs/              Design notes, process documentation, entity map
+docs/              Design notes, process documentation, entity map, physical install notes
 home-assistant/    Home Assistant automation YAML
 data/              Bench-test and power-profile data
 scripts/           Small analysis helpers
@@ -123,6 +124,7 @@ photos/            Placeholders for bench-test and installation photos
 - `home-assistant/shop-night-purge.yaml` contains the active v1 field-cycle automations mirrored from Home Assistant.
 - `docs/night-purge-process.md` documents the current operating model, boundaries, and accepted edge cases.
 - `docs/entity-map.md` records the Home Assistant entity IDs used by the automation.
+- `docs/damper-install.md` documents the physical shutter, fan, wall penetration, smart-plug control, and fail-closed behavior of the damper/fan subsystem.
 - `docs/2026-06-30-heatwave-test.md` records the current heatwave test intent and deferred work.
 - `home-assistant/packages/shop_ventilation.yaml` is a non-active starter/reference package and is not current field-cycle ground truth.
 
