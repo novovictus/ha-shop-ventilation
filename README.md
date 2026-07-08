@@ -1,16 +1,16 @@
 # Home Assistant Shop Ventilation Controller
 
-A Home Assistant reference design for a high-ceiling shop nighttime heat-extraction controller using bay-door state, AC/heat state, floor temperature, outdoor temperature, outdoor humidity, and fail-off control logic.
+A Home Assistant reference design for a high-ceiling shop nighttime heat-extraction controller using bay-door state, AC/heat state, floor temperature, indoor temperature, ceiling temperature, outdoor temperature, outdoor humidity, and fail-off control logic.
 
 The project treats the shop as a thermal-mass problem, not a comfort thermostat. The goal is to remove useful stored heat from the building mass when outside air has a clear advantage, while avoiding daylight solar gain, occupied AC operation, and unnecessary fan runtime when the shop passively equalizes on its own.
 
 ## Project status
 
-Current field-cycle test: v1 heatwave nighttime floor/slab heat extraction with a simple RH guardrail.
+Current field-cycle test: v1 nighttime heat extraction with paired damper/blower control and a simple RH guardrail.
 
 The active Home Assistant implementation is treated as ground truth. This repository tracks the currently deployed `Shop Night Heat Extraction` start/stop automations rather than older disabled/retained automations still present locally for posterity.
 
-The earlier rear-window, blower, ceiling-delta, and dew-point cycle has been retired for this test. The current automation remains intentionally simple: damper/fan only, nighttime only, bay closed, AC/heat off, outdoor air at least 3°F cooler than the floor, and outdoor RH below 85%.
+The July 2026 occupied/manual-cycle data pull changed the active model from floor-only damper control to paired active extraction. The current automation remains intentionally simple: nighttime only, bay closed, AC/heat off, outdoor air meaningfully cooler than the shop, and outdoor RH below 85%.
 
 ## Active versus reference YAML
 
@@ -32,39 +32,64 @@ During field testing, the active automation may intentionally differ from older 
 
 ## Current behavior
 
-The damper/fan may start only when all of the following are true:
+The active extraction pair may start only when all of the following are true:
 
 - Time is after sunset plus 20 minutes and before sunrise.
 - AC/heat switch is off.
 - Bay door is closed.
-- Damper/fan switch is off.
-- Outdoor temperature is at least 3°F cooler than the floor temperature.
+- Damper or blower is off.
 - Outdoor relative humidity is below 85%.
+- Outdoor air has useful cooling value against floor, indoor, or ceiling temperature.
+
+Temperature start rule:
+
+```text
+outdoor <= floor - 3°F
+OR outdoor <= indoor - 3°F
+OR outdoor <= ceiling - 5°F
+```
 
 When those conditions are met:
 
 ```text
-damper/fan on
+damper on
+blower on
 ```
 
-The automation evaluates the start case at sunset plus 20 minutes and every 20 minutes overnight.
+The automation evaluates the start case at sunset plus 20 minutes, every 20 minutes overnight, and when either controlled output is turned off. This lets it repair mismatched active states such as damper on / blower off.
 
 An active extraction run stops if any of the following are true:
 
 - Sunrise occurs.
 - AC/heat switch turns on.
 - Bay door opens.
-- Outdoor temperature rises to within 1°F below floor temperature.
 - Outdoor relative humidity reaches the 85% cutoff.
+- Outdoor air no longer has useful cooling advantage across floor, indoor, and ceiling references.
 
-There is no maximum runtime in this cycle. If conditions remain favorable all night, the system may run all night. If the shop equalizes passively and conditions never justify the fan, non-operation is a valid successful outcome.
+Temperature stop rule:
+
+```text
+outdoor >= floor - 1°F
+AND outdoor >= indoor - 1.5°F
+AND outdoor >= ceiling - 2.5°F
+```
+
+When stop conditions are met:
+
+```text
+damper off
+blower off
+```
+
+There is no maximum runtime in this cycle. If conditions remain favorable all night, the system may run all night. If the shop equalizes passively and conditions never justify the blower, non-operation is a valid successful outcome.
 
 ## Field observations captured in this cycle
 
 - Closed shop plus AC protects the occupied-zone dry bubble even while the upper layer remains very hot.
 - Turning AC off for meeting noise allows the occupied-zone comfort bubble to collapse quickly on hot-soaked days.
-- Blower use during occupied humid conditions can raise work-area humidity without meaningfully arresting upper-zone heat gain.
-- Rear-window opening can lower the upper layer, but if outdoor dew point is high it may make the working layer feel worse.
+- Blower plus damper provides useful nighttime heat extraction when there is a real outdoor temperature advantage and the shop is closed enough to create directed airflow.
+- Damper-only operation is weak and should not be treated as active extraction.
+- Rear-window opening can passively lower the upper layer, but it does not replace active extraction when indoor/ceiling air remains meaningfully warmer than outdoor air.
 - Door-open plus blower/damper can provide useful purge when there is a real air path, but daytime openings fight AC and solar gain.
 - Closed-shop passive equalization can collapse ceiling stratification after the shop is shut down.
 - The current v1 automation exists to catch nights when the shop would otherwise wake up hot despite cool outside air.
@@ -73,14 +98,11 @@ There is no maximum runtime in this cycle. If conditions remain favorable all ni
 
 The control logic is Home Assistant entity based and relay agnostic. It does not assume Shelly hardware.
 
-Active v1 output:
+Active v1 outputs:
 
-- Powered damper/fan controlled by Home Assistant as `switch.damper_switch`.
+- Powered damper controlled by Home Assistant as `switch.damper_switch`.
+- Blower controlled by Home Assistant as `switch.blower_switch`.
 - Physical damper/fan build details are documented in `docs/damper-install.md`.
-
-Available but not used in v1:
-
-- Supplemental blower controlled by Home Assistant as `switch.blower_switch`.
 
 Input entities used by v1:
 
@@ -93,6 +115,10 @@ Input entities used by v1:
   - `sensor.outdoor_thermometer_humidity`
 - Floor temperature sensor:
   - `sensor.floor_thermometer_temperature`
+- Indoor temperature sensor:
+  - `sensor.indoor_thermometer_temperature`
+- Ceiling temperature sensor:
+  - `sensor.ceiling_thermometer_temperature`
 
 Observed but not active v1 control inputs:
 
@@ -101,10 +127,8 @@ Observed but not active v1 control inputs:
   - `binary_sensor.back_right_window_opening`
 - Standard side-door opening sensor:
   - `binary_sensor.door_opening`
-- Indoor and ceiling temperature/humidity sensors:
-  - `sensor.indoor_thermometer_temperature`
+- Humidity sensors not used for active control:
   - `sensor.indoor_thermometer_humidity`
-  - `sensor.ceiling_thermometer_temperature`
   - `sensor.ceiling_thermometer_humidity`
   - `sensor.floor_thermometer_humidity`
 
@@ -122,7 +146,7 @@ photos/            Placeholders for bench-test and installation photos
 ## Current implementation
 
 - `home-assistant/shop-night-purge.yaml` contains the active v1 field-cycle automations mirrored from Home Assistant.
-- `docs/night-purge-process.md` documents the current operating model, boundaries, and accepted edge cases.
+- `docs/night-purge-process.md` documents the current operating model, boundaries, visual flow map, and accepted edge cases.
 - `docs/entity-map.md` records the Home Assistant entity IDs used by the automation.
 - `docs/damper-install.md` documents the physical shutter, fan, wall penetration, smart-plug control, and fail-closed behavior of the damper/fan subsystem.
 - `docs/2026-06-30-heatwave-test.md` records the current heatwave test intent and deferred work.
@@ -135,12 +159,10 @@ The YAML file is written as Home Assistant automation definitions. If importing 
 - Do not run as an occupied comfort thermostat.
 - Do not use blower-only or separate blower modes.
 - Do not automate window operation.
-- Do not perform a separate ceiling-driven purge stage in v1.
-- Do not use the indoor thermometer as the main trigger.
+- Do not automatically close or open windows.
 - Do not automatically decide that the shop needs AC.
-- Do not add dew-point calculation until the simple RH-guarded test has been observed.
+- Do not add dew-point calculation until the simple RH-guarded paired-extraction test has been observed.
 - Do not add occupancy/motion logic until sensors are integrated.
-- Do not add more recovery/notification logic until the current cycle has been observed.
 - Do not assume a specific relay/switch vendor.
 - Do not document disabled legacy local automations as current behavior.
 
