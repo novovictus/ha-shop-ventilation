@@ -5,12 +5,20 @@
 # Paste each automation separately into the Home Assistant automation YAML editor.
 #
 # Purpose:
-# - Use the damper/fan as a nighttime floor/slab heat-extraction safeguard.
+# - Use the damper and blower as a paired nighttime heat-extraction system.
 # - Do nothing when the shop passively equalizes without help.
 # - Avoid daytime purge, AC conflict, bay-door/manual-use conflict, and high-RH extraction.
+# - Recover mismatched active states such as damper on / blower off.
+#
+# July 2026 field update:
+# - The floor sensor is conservative and slow-moving.
+# - Indoor temperature better reflects occupied-zone comfort.
+# - Ceiling temperature exposes stored upper-layer heat.
+# - Start logic may use floor, indoor, or ceiling deltas.
+# - Stop logic waits until the useful cooling advantage is gone across the shop.
 
 - alias: Shop Night Heat Extraction - Start
-  description: Starts damper/fan overnight when outdoor air is cooler than the floor and humidity is acceptable.
+  description: Starts damper and blower overnight when outdoor air is cooler than the shop and humidity is acceptable.
   mode: single
 
   trigger:
@@ -21,10 +29,20 @@
     - platform: time_pattern
       minutes: "/20"
 
+    # Repair a mismatched active-extraction state if one device is manually turned off
+    # while conditions still call for extraction.
+    - platform: state
+      entity_id:
+        - switch.damper_switch
+        - switch.blower_switch
+      to: "off"
+
   condition:
-    - condition: state
-      entity_id: switch.damper_switch
-      state: "off"
+    # Start or repair active extraction if either controlled device is off.
+    - condition: template
+      value_template: >
+        {{ is_state('switch.damper_switch', 'off')
+           or is_state('switch.blower_switch', 'off') }}
 
     - condition: sun
       after: sunset
@@ -39,31 +57,47 @@
       entity_id: switch.ac_heat_switch_switch
       state: "off"
 
-    - condition: template
-      value_template: >
-        {{ states('sensor.outdoor_thermometer_temperature') | float(999)
-           <= states('sensor.floor_thermometer_temperature') | float(0) - 3 }}
-
     - condition: numeric_state
       entity_id: sensor.outdoor_thermometer_humidity
       below: 85
 
+    # Outdoor air must have useful cooling value.
+    #
+    # The last occupied/manual-cycle pull showed that floor-only control is too
+    # conservative during hot-soaked or stratified conditions. Allow extraction
+    # when outdoor air is meaningfully cooler than floor, indoor, or ceiling air.
+    - condition: template
+      value_template: >
+        {% set outdoor = states('sensor.outdoor_thermometer_temperature') | float(999) %}
+        {% set floor = states('sensor.floor_thermometer_temperature') | float(0) %}
+        {% set indoor = states('sensor.indoor_thermometer_temperature') | float(0) %}
+        {% set ceiling = states('sensor.ceiling_thermometer_temperature') | float(0) %}
+        {{
+          outdoor <= floor - 3
+          or outdoor <= indoor - 3
+          or outdoor <= ceiling - 5
+        }}
+
   action:
     - service: switch.turn_on
       target:
-        entity_id: switch.damper_switch
+        entity_id:
+          - switch.damper_switch
+          - switch.blower_switch
 
     - service: logbook.log
       data:
         name: Shop Night Heat Extraction
         message: >
-          Started. Outdoor temp {{ states('sensor.outdoor_thermometer_temperature') }}°F,
-          floor temp {{ states('sensor.floor_thermometer_temperature') }}°F,
+          Started active extraction. Outdoor {{ states('sensor.outdoor_thermometer_temperature') }}°F,
+          floor {{ states('sensor.floor_thermometer_temperature') }}°F,
+          indoor {{ states('sensor.indoor_thermometer_temperature') }}°F,
+          ceiling {{ states('sensor.ceiling_thermometer_temperature') }}°F,
           outdoor RH {{ states('sensor.outdoor_thermometer_humidity') }}%.
         entity_id: switch.damper_switch
 
 - alias: Shop Night Heat Extraction - Stop
-  description: Stops damper/fan on sunrise, HVAC, bay door open, temp convergence, or high humidity.
+  description: Stops damper and blower on sunrise, HVAC, bay door open, temp convergence, or high humidity.
   mode: single
 
   trigger:
@@ -81,10 +115,21 @@
     - platform: time_pattern
       minutes: "/20"
 
+    # Re-check promptly when the thermal or humidity state changes.
+    - platform: state
+      entity_id:
+        - sensor.outdoor_thermometer_temperature
+        - sensor.floor_thermometer_temperature
+        - sensor.indoor_thermometer_temperature
+        - sensor.ceiling_thermometer_temperature
+        - sensor.outdoor_thermometer_humidity
+
   condition:
-    - condition: state
-      entity_id: switch.damper_switch
-      state: "on"
+    # Stop if either controlled device is on. This cleans up mismatches.
+    - condition: template
+      value_template: >
+        {{ is_state('switch.damper_switch', 'on')
+           or is_state('switch.blower_switch', 'on') }}
 
     - condition: or
       conditions:
@@ -100,25 +145,39 @@
           after: sunrise
           before: sunset
 
-        - condition: template
-          value_template: >
-            {{ states('sensor.outdoor_thermometer_temperature') | float(999)
-               >= states('sensor.floor_thermometer_temperature') | float(0) - 1 }}
-
         - condition: numeric_state
           entity_id: sensor.outdoor_thermometer_humidity
           above: 84.9
 
+        # Stop only when useful cooling advantage is basically gone.
+        # Do not stop merely because the floor has converged; the floor can be
+        # stable while indoor and ceiling air still hold removable heat.
+        - condition: template
+          value_template: >
+            {% set outdoor = states('sensor.outdoor_thermometer_temperature') | float(999) %}
+            {% set floor = states('sensor.floor_thermometer_temperature') | float(0) %}
+            {% set indoor = states('sensor.indoor_thermometer_temperature') | float(0) %}
+            {% set ceiling = states('sensor.ceiling_thermometer_temperature') | float(0) %}
+            {{
+              outdoor >= floor - 1
+              and outdoor >= indoor - 1.5
+              and outdoor >= ceiling - 2.5
+            }}
+
   action:
     - service: switch.turn_off
       target:
-        entity_id: switch.damper_switch
+        entity_id:
+          - switch.damper_switch
+          - switch.blower_switch
 
     - service: logbook.log
       data:
         name: Shop Night Heat Extraction
         message: >
-          Stopped. Outdoor temp {{ states('sensor.outdoor_thermometer_temperature') }}°F,
-          floor temp {{ states('sensor.floor_thermometer_temperature') }}°F,
+          Stopped active extraction. Outdoor {{ states('sensor.outdoor_thermometer_temperature') }}°F,
+          floor {{ states('sensor.floor_thermometer_temperature') }}°F,
+          indoor {{ states('sensor.indoor_thermometer_temperature') }}°F,
+          ceiling {{ states('sensor.ceiling_thermometer_temperature') }}°F,
           outdoor RH {{ states('sensor.outdoor_thermometer_humidity') }}%.
         entity_id: switch.damper_switch
