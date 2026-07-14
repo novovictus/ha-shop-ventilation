@@ -152,6 +152,10 @@ photos/            Placeholders for bench-test and installation photos
 - `docs/2026-06-30-heatwave-test.md` records the current heatwave test intent and deferred work.
 - `home-assistant/packages/shop_ventilation.yaml` is a non-active starter/reference package and is not current field-cycle ground truth.
 
+## Field run artifacts
+
+- `data/field-runs/2026-07-12-night-extraction-good-run.md` records the first clean long automated paired damper/blower run: 7.35 hours, 1.63 kWh estimated energy, -6.3°F indoor, -6.5°F ceiling, -3.8°F floor, and a humidity stop at 85.3% outdoor RH.
+
 The YAML file is written as Home Assistant automation definitions. If importing into the Automation UI, paste the start and stop automations separately.
 
 ## Current non-goals
