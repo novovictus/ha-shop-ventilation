@@ -60,6 +60,33 @@ sunset + 20 minutes to sunrise
 
 The automation evaluates at sunset plus 20 minutes and every 20 minutes overnight. It also re-evaluates if either controlled output is turned off while active-extraction conditions still apply.
 
+## Control cadence and KISS constraint
+
+The 20-minute time-pattern trigger is intentional design, not an accidental debounce and not a missing formal hold timer.
+
+The current field cycle is deliberately simple:
+
+```text
+One cycle.
+Two rough seasons.
+Simple gates.
+Paired outputs.
+Observe before optimizing.
+```
+
+The automation intentionally samples every 20 minutes rather than continuously reacting. Short spikes and drops are naturally ignored unless they are still present at the next scheduled evaluation. This is the desired behavior for the current cycle.
+
+The design avoids unnecessary control complexity:
+
+- No helper state.
+- No rolling averages.
+- No formal debounce timer.
+- No stacked hysteresis model.
+- No seasonal prediction.
+- No dew-point model yet.
+
+The underlying system already provides useful filtering: Home Assistant's scheduled evaluation cadence, the building's thermal mass, and the current temperature thresholds. Over-engineering the control loop during this one-cycle/two-season observation period would add failure modes faster than it would add resilience.
+
 ## Start requirements
 
 A heat-extraction run may start only when all of the following are true:
@@ -302,7 +329,6 @@ Window-open operation is allowed if all active extraction conditions are otherwi
 - Dew point calculation is not yet included.
 - Occupancy or motion detection is not yet included.
 - AC automation is not yet included.
-- The time-pattern check may start or stop on a single sample rather than a continuous verified condition.
 - Manual off during valid extraction conditions may be repaired by the start automation.
 - Manual on during stop conditions may be corrected by the stop automation.
 
