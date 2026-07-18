@@ -1,0 +1,72 @@
+alias: Shop Night Heat Extraction - Stop
+description: >-
+  Stops damper and blower on sunrise, HVAC, bay door open, temperature
+  convergence, or high humidity.
+triggers:
+  - entity_id: binary_sensor.bay_door_opening
+    to: "on"
+    trigger: state
+  - entity_id: switch.ac_heat_switch_switch
+    to: "on"
+    trigger: state
+  - event: sunrise
+    trigger: sun
+  - minutes: /20
+    trigger: time_pattern
+  - entity_id:
+      - sensor.outdoor_thermometer_temperature
+      - sensor.floor_thermometer_temperature
+      - sensor.indoor_thermometer_temperature
+      - sensor.ceiling_thermometer_temperature
+      - sensor.outdoor_thermometer_humidity
+    trigger: state
+conditions:
+  - condition: template
+    value_template: |
+      {{ is_state('switch.damper_switch', 'on')
+         or is_state('switch.blower_switch', 'on') }}
+  - condition: or
+    conditions:
+      - condition: state
+        entity_id: binary_sensor.bay_door_opening
+        state: "on"
+      - condition: state
+        entity_id: switch.ac_heat_switch_switch
+        state: "on"
+      - condition: sun
+        after: sunrise
+        before: sunset
+      - condition: numeric_state
+        entity_id: sensor.outdoor_thermometer_humidity
+        above: 84.9
+      - condition: template
+        value_template: >
+          {% set outdoor = states('sensor.outdoor_thermometer_temperature') |
+          float(999) %} {% set floor =
+          states('sensor.floor_thermometer_temperature') | float(0) %} {% set
+          indoor = states('sensor.indoor_thermometer_temperature') | float(0) %}
+          {% set ceiling = states('sensor.ceiling_thermometer_temperature') |
+          float(0) %} {{
+            outdoor >= floor - 1
+            and outdoor >= indoor - 1.5
+            and outdoor >= ceiling - 2.5
+          }}
+actions:
+  - target:
+      entity_id:
+        - switch.damper_switch
+        - switch.blower_switch
+    action: switch.turn_off
+    data: {}
+  - data:
+      name: Shop Night Heat Extraction
+      message: >
+        Stopped active extraction. Outdoor {{
+        states('sensor.outdoor_thermometer_temperature') }}°F, floor {{
+        states('sensor.floor_thermometer_temperature') }}°F, indoor {{
+        states('sensor.indoor_thermometer_temperature') }}°F, ceiling {{
+        states('sensor.ceiling_thermometer_temperature') }}°F, outdoor RH {{
+        states('sensor.outdoor_thermometer_humidity') }}%.
+      entity_id: switch.damper_switch
+    action: logbook.log
+mode: single
