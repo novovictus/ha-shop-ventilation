@@ -115,10 +115,6 @@ home-assistant/
   shop-night-heat-extraction-stop.yaml
 ```
 
-## Safety
-
-This repository records control logic and an installed physical arrangement. It is not an electrical wiring guide. Mains-voltage work should be designed, installed, and verified according to local code by a qualified electrician.
-
 ## License
 
 MIT. See [LICENSE](LICENSE).
