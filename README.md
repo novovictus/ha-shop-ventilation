@@ -83,11 +83,20 @@ The first clean long paired-extraction run occurred overnight on July 12-13, 202
 
 The run maintained damper on, blower on, AC/heat off, and bay closed for the full interval. Rear windows were open and did not prevent useful extraction. The run started because indoor and ceiling air had sufficient temperature advantage even though the older floor-only rule would not yet have triggered.
 
+## Blower power sample
+
+The flat [`blower-power-profile-summary.csv`](blower-power-profile-summary.csv) file preserves the small observed steady-state sample: 1.8-1.9 A, 180-192 W, and 60 Hz. Smart-plug history may not capture first-cycle motor inrush.
+
+## Sensor placement
+
+The outdoor sensor should represent shaded air available to the intake. The indoor sensor should represent normal working height and avoid direct AC or blower discharge. The ceiling sensor should measure the upper heat reservoir rather than roof or wall surface temperature.
+
 ## Repository layout
 
 ```text
 README.md
 LICENSE
+blower-power-profile-summary.csv
 home-assistant/
   shop-night-heat-extraction-start.yaml
   shop-night-heat-extraction-stop.yaml
