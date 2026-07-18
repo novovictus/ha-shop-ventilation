@@ -1,32 +1,23 @@
 # Shop Night Heat Extraction Process
 
+## Status
+
+This document describes the July 2026 working baseline for the shop nighttime heat-extraction system.
+
+The corresponding Home Assistant automations are currently disabled while the system is under review. The preserved baseline files are:
+
+- [`../home-assistant/automations/shop-night-heat-extraction-start.yaml`](../home-assistant/automations/shop-night-heat-extraction-start.yaml)
+- [`../home-assistant/automations/shop-night-heat-extraction-stop.yaml`](../home-assistant/automations/shop-night-heat-extraction-stop.yaml)
+
 ## Purpose
 
-This document describes the current v1 field-cycle process for the shop heat-extraction automation.
+The system reduces hot mornings after high heat-load days by removing stored heat when outdoor air has a useful temperature advantage. It is not a comfort thermostat.
 
-The goal is to reduce hot mornings after high heat-load days. The automation uses a paired damper and blower only when outdoor air is meaningfully cooler than the shop and outdoor humidity is within the v1 guardrail.
+The baseline treats the powered intake damper and the separate extraction blower as one active extraction pair. Rear windows remain manual and observational. Dew-point calculation, occupancy logic, and AC automation are not part of this baseline.
 
-This is not a comfort thermostat. It is a nighttime thermal-state safeguard for a shop with slab heat storage, stratified ceiling heat, passive equalization behavior, manual window operation, and daytime AC use.
+## Baseline entities
 
-## Current posture
-
-The previous rear-window, supplemental-blower, dew-point, and multi-stage purge model remains retired for this test cycle.
-
-The July 2026 occupied/manual-cycle pull changed the active v1 model from floor-only damper control to paired active extraction:
-
-- The damper and blower are now treated as one active extraction pair.
-- The floor sensor remains a conservative thermal-mass reference.
-- Indoor temperature is active because it better reflects occupied-zone recovery.
-- Ceiling temperature is active because it exposes stored upper-layer heat.
-- Rear window sensors remain observational only.
-- Dew-point calculation remains deferred.
-- Outdoor RH remains the crude humidity guardrail.
-- There is still no maximum runtime.
-- There is still no AC automation.
-
-## Active entities
-
-Inputs used by v1:
+Inputs:
 
 - `switch.ac_heat_switch_switch`
 - `binary_sensor.bay_door_opening`
@@ -36,65 +27,27 @@ Inputs used by v1:
 - `sensor.indoor_thermometer_temperature`
 - `sensor.ceiling_thermometer_temperature`
 
-Outputs used by v1:
+Outputs:
 
 - `switch.damper_switch`
 - `switch.blower_switch`
 
-Observed but not active in v1:
-
-- `binary_sensor.back_left_window_opening`
-- `binary_sensor.back_right_window_opening`
-- `binary_sensor.door_opening`
-- `sensor.indoor_thermometer_humidity`
-- `sensor.ceiling_thermometer_humidity`
-- `sensor.floor_thermometer_humidity`
-
 ## Operating window
 
-Heat extraction is allowed only between:
+Heat extraction is allowed only from sunset plus 20 minutes until sunrise.
 
-```text
-sunset + 20 minutes to sunrise
-```
+The start automation evaluates at sunset plus 20 minutes, every 20 minutes overnight, and whenever either controlled output is turned off. This allows it to repair a mismatched damper/blower state while valid extraction conditions remain true.
 
-The automation evaluates at sunset plus 20 minutes and every 20 minutes overnight. It also re-evaluates if either controlled output is turned off while active-extraction conditions still apply.
-
-## Control cadence and KISS constraint
-
-The 20-minute time-pattern trigger is intentional design, not an accidental debounce and not a missing formal hold timer.
-
-The current field cycle is deliberately simple:
-
-```text
-One cycle.
-Two rough seasons.
-Simple gates.
-Paired outputs.
-Observe before optimizing.
-```
-
-The automation intentionally samples every 20 minutes rather than continuously reacting. Short spikes and drops are naturally ignored unless they are still present at the next scheduled evaluation. This is the desired behavior for the current cycle.
-
-The design avoids unnecessary control complexity:
-
-- No helper state.
-- No rolling averages.
-- No formal debounce timer.
-- No stacked hysteresis model.
-- No seasonal prediction.
-- No dew-point model yet.
-
-The underlying system already provides useful filtering: Home Assistant's scheduled evaluation cadence, the building's thermal mass, and the current temperature thresholds. Over-engineering the control loop during this one-cycle/two-season observation period would add failure modes faster than it would add resilience.
+The 20-minute cadence is intentional. The baseline uses simple gates, building thermal mass, and scheduled evaluation rather than helper state, rolling averages, or a formal debounce timer.
 
 ## Start requirements
 
-A heat-extraction run may start only when all of the following are true:
+A run may start only when all of the following are true:
 
-- Time is after sunset plus 20 minutes and before sunrise.
-- Damper or blower is off.
-- AC/heat switch is off.
-- Bay door is closed.
+- It is after sunset plus 20 minutes and before sunrise.
+- Either the damper or blower is off.
+- AC/heat is off.
+- The bay door is closed.
 - Outdoor RH is below 85%.
 - Outdoor air is usefully cooler than at least one active shop thermal reference.
 
@@ -106,29 +59,23 @@ OR outdoor <= indoor - 3°F
 OR outdoor <= ceiling - 5°F
 ```
 
-This replaces the older floor-only start rule.
-
-## Run behavior
-
-When start requirements are met:
+When the requirements are met:
 
 ```text
 damper on
 blower on
 ```
 
-The active extraction state is now paired. A damper-on / blower-off state is treated as a repairable mismatch, not as a valid active state.
-
-There is no maximum runtime in v1. If favorable conditions persist all night, the system may continue running. This is intentional for the heatwave data-collection cycle.
+A damper-on/blower-off or blower-on/damper-off state is treated as a repairable mismatch, not a valid active state.
 
 ## Stop conditions
 
-An active extraction run stops when any of the following are true:
+A run stops when any of the following are true:
 
 - Sunrise occurs.
-- AC/heat switch turns on.
-- Bay door opens.
-- Outdoor RH reaches the 85% cutoff.
+- AC/heat turns on.
+- The bay door opens.
+- Outdoor RH reaches 85%.
 - Outdoor air no longer has useful cooling advantage across the shop.
 
 Temperature stop rule:
@@ -139,203 +86,56 @@ AND outdoor >= indoor - 1.5°F
 AND outdoor >= ceiling - 2.5°F
 ```
 
-This intentionally does not stop merely because the floor has converged. The July 2026 pull showed the floor can be stable while indoor and ceiling air still hold removable heat.
-
-Humidity stop rule:
-
-```text
-outdoor RH >= 85%
-```
-
-When stop requirements are met:
+When a stop condition is met:
 
 ```text
 damper off
 blower off
 ```
 
-The stop automation also cleans up mismatched active states by turning both outputs off if either output is on.
+The stop automation turns both outputs off if either output is on, which also cleans up mismatched active states.
 
-## Visual flow map
+## Runtime behavior
 
-Start flow:
+There is no maximum runtime in the preserved baseline. If conditions remain favorable, the pair may run all night.
 
-```text
-                         ┌──────────────────────────────┐
-                         │  Every 20 min OR sunset+20   │
-                         │  OR damper/blower turned off │
-                         └───────────────┬──────────────┘
-                                         │
-                                         v
-                              ┌─────────────────────┐
-                              │ Is either device off?│
-                              │ damper OR blower     │
-                              └──────────┬──────────┘
-                                         │ no
-                                         v
-                                      Do nothing
-
-                                         │ yes
-                                         v
-                              ┌─────────────────────┐
-                              │ Is it night?         │
-                              │ sunset+20 to sunrise │
-                              └──────────┬──────────┘
-                                         │ no
-                                         v
-                                      Do nothing
-
-                                         │ yes
-                                         v
-                              ┌─────────────────────┐
-                              │ Bay door closed?     │
-                              └──────────┬──────────┘
-                                         │ no
-                                         v
-                                      Do nothing
-
-                                         │ yes
-                                         v
-                              ┌─────────────────────┐
-                              │ AC / heat off?       │
-                              └──────────┬──────────┘
-                                         │ no
-                                         v
-                                      Do nothing
-
-                                         │ yes
-                                         v
-                              ┌─────────────────────┐
-                              │ Outdoor RH < 85%?    │
-                              └──────────┬──────────┘
-                                         │ no
-                                         v
-                                      Do nothing
-
-                                         │ yes
-                                         v
-                    ┌────────────────────────────────────────┐
-                    │ Is outdoor air usefully cooler?         │
-                    │                                        │
-                    │ outdoor <= floor - 3°F                 │
-                    │ OR outdoor <= indoor - 3°F              │
-                    │ OR outdoor <= ceiling - 5°F             │
-                    └───────────────────┬────────────────────┘
-                                        │ no
-                                        v
-                                     Do nothing
-
-                                        │ yes
-                                        v
-                    ┌────────────────────────────────────────┐
-                    │ TURN ON:                               │
-                    │ - damper                               │
-                    │ - blower                               │
-                    └────────────────────────────────────────┘
-```
-
-Stop flow:
-
-```text
-                         ┌──────────────────────────────┐
-                         │  Bay opens                   │
-                         │  OR AC/heat turns on          │
-                         │  OR sunrise                   │
-                         │  OR every 20 min              │
-                         │  OR temp/RH changes           │
-                         └───────────────┬──────────────┘
-                                         │
-                                         v
-                              ┌─────────────────────┐
-                              │ Is either device on? │
-                              │ damper OR blower     │
-                              └──────────┬──────────┘
-                                         │ no
-                                         v
-                                      Do nothing
-
-                                         │ yes
-                                         v
-                    ┌────────────────────────────────────────┐
-                    │ Stop if ANY are true:                  │
-                    │                                        │
-                    │ bay door open                          │
-                    │ OR AC/heat on                          │
-                    │ OR daytime                             │
-                    │ OR outdoor RH >= 85%                   │
-                    │ OR cooling advantage is gone           │
-                    └───────────────────┬────────────────────┘
-                                        │ no
-                                        v
-                              Keep damper + blower on
-
-                                        │ yes
-                                        v
-                    ┌────────────────────────────────────────┐
-                    │ TURN OFF:                              │
-                    │ - damper                               │
-                    │ - blower                               │
-                    └────────────────────────────────────────┘
-```
-
-## Accepted non-start condition
-
-Non-operation is a valid result.
-
-If the shop passively equalizes, the outdoor/shop delta may never justify running the blower. That is not a failure. It means the building handled the heat dump without additional electricity.
-
-## Field model
-
-Practical rule:
-
-```text
-Daytime: protect the work-area AC condition.
-Night: extract stored heat only when outdoor conditions are favorable.
-Passive success: if the shop equalizes on its own, do nothing.
-Active extraction: when the delta is real, run damper and blower together.
-```
+Non-operation is also a valid outcome. If the shop passively equalizes before the thresholds are met, the automation does nothing.
 
 ## Humidity role
 
-V1 uses relative humidity as a crude guardrail because dew point is not implemented in the deployed UI automations.
+The baseline uses outdoor relative humidity as a crude guardrail:
 
 ```text
-outdoor RH < 85% = allow start
+outdoor RH < 85%  = start allowed
 outdoor RH >= 85% = stop or block
 ```
 
-Dew point logic remains deferred until after more paired-extraction observation.
+Dew-point logic remains deferred.
 
-## Floor, indoor, and ceiling sensor roles
+## Sensor roles
 
-The v1 thermal model now uses three active temperature references:
+- **Floor:** conservative slab and thermal-mass reference.
+- **Indoor:** occupied-zone and general shop-air reference.
+- **Ceiling:** upper-layer stored-heat reference.
 
-- Floor: conservative thermal-mass/slab reference.
-- Indoor: occupied-zone and general shop-air reference.
-- Ceiling: stored upper-layer heat reference.
-
-Start can be triggered by any one of these references showing useful outdoor advantage. Stop requires convergence across all three references so the automation does not quit while removable heat remains above the occupied layer.
+Start can be justified by any one reference. Stop requires convergence across all three so extraction does not stop while removable heat remains in another layer.
 
 ## Window role
 
-Rear windows are still manual/passive ventilation. They are not an automation gate in v1.
+Rear windows are manual/passive ventilation paths. They are not automation gates in this baseline. Open windows do not block paired extraction when the active conditions are otherwise satisfied.
 
-Window-open operation is allowed if all active extraction conditions are otherwise true. Open windows are not interpreted as a reason to block the blower; they are simply an existing passive air path.
+## Accepted limitations
 
-## Accepted edge cases
+- Home Assistant restart recovery relies on normal scheduled rechecks.
+- Stale-sensor detection is not included.
+- Dew-point calculation is not included.
+- Occupancy or motion detection is not included.
+- AC automation is not included.
+- Manual off may be repaired while valid extraction conditions remain true.
+- Manual on may be corrected when stop conditions are true.
 
-- Home Assistant restart recovery is not yet explicitly handled beyond normal time-pattern rechecks.
-- Stale sensor detection is not yet included.
-- Dew point calculation is not yet included.
-- Occupancy or motion detection is not yet included.
-- AC automation is not yet included.
-- Manual off during valid extraction conditions may be repaired by the start automation.
-- Manual on during stop conditions may be corrected by the stop automation.
+## Field reference
 
-## YAML usage
+The July 12–13, 2026 good run is documented in [`../data/field-runs/2026-07-12-night-extraction-good-run.md`](../data/field-runs/2026-07-12-night-extraction-good-run.md).
 
-The YAML file is written as two Home Assistant automation definitions stored together for repository tracking. If importing through the Home Assistant Automation UI, paste the start and stop automations separately.
-
-## Sensor placement
-
-The outdoor thermometer is mounted high under an eave. Its reading may lag or differ from public weather forecasts, especially around sunset and after solar loading. The automation uses the observed local sensor rather than forecast values.
+The outdoor thermometer is mounted high under an eave. The baseline uses that observed local sensor rather than public forecast data.
