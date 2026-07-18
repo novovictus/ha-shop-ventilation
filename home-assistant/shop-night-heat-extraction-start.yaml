@@ -1,0 +1,64 @@
+alias: Shop Night Heat Extraction - Start
+description: >-
+  Starts damper and blower overnight when outdoor air is cooler than the shop
+  and humidity is acceptable.
+triggers:
+  - event: sunset
+    offset: "00:20:00"
+    trigger: sun
+  - minutes: /20
+    trigger: time_pattern
+  - entity_id:
+      - switch.damper_switch
+      - switch.blower_switch
+    to: "off"
+    trigger: state
+conditions:
+  - condition: template
+    value_template: |
+      {{ is_state('switch.damper_switch', 'off')
+         or is_state('switch.blower_switch', 'off') }}
+  - condition: sun
+    after: sunset
+    after_offset: "00:20:00"
+    before: sunrise
+  - condition: state
+    entity_id: binary_sensor.bay_door_opening
+    state: "off"
+  - condition: state
+    entity_id: switch.ac_heat_switch_switch
+    state: "off"
+  - condition: numeric_state
+    entity_id: sensor.outdoor_thermometer_humidity
+    below: 85
+  - condition: template
+    value_template: >
+      {% set outdoor = states('sensor.outdoor_thermometer_temperature') |
+      float(999) %} {% set floor =
+      states('sensor.floor_thermometer_temperature') | float(0) %} {% set indoor
+      = states('sensor.indoor_thermometer_temperature') | float(0) %} {% set
+      ceiling = states('sensor.ceiling_thermometer_temperature') | float(0) %}
+      {{
+        outdoor <= floor - 3
+        or outdoor <= indoor - 3
+        or outdoor <= ceiling - 5
+      }}
+actions:
+  - target:
+      entity_id:
+        - switch.damper_switch
+        - switch.blower_switch
+    action: switch.turn_on
+    data: {}
+  - data:
+      name: Shop Night Heat Extraction
+      message: >
+        Started active extraction. Outdoor {{
+        states('sensor.outdoor_thermometer_temperature') }}°F, floor {{
+        states('sensor.floor_thermometer_temperature') }}°F, indoor {{
+        states('sensor.indoor_thermometer_temperature') }}°F, ceiling {{
+        states('sensor.ceiling_thermometer_temperature') }}°F, outdoor RH {{
+        states('sensor.outdoor_thermometer_humidity') }}%.
+      entity_id: switch.damper_switch
+    action: logbook.log
+mode: single
