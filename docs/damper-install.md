@@ -76,7 +76,3 @@ The detailed operating thresholds remain in the root README and the two baseline
 This subsystem is the existing powered aperture in the shop ventilation design. Any future powered-window or hopper-window system should be treated as a separate passive or semi-passive air-path subsystem, not as a replacement for the damper/fan path.
 
 Because the damper/fan path fails closed, any future powered opening should meet a similar safety standard: confirmed closed state, weather guardrails, and a conservative failure mode.
-
-## Safety boundary
-
-This document records the installed physical arrangement. It is not an electrical wiring guide. Mains-voltage work should be designed, installed, and verified according to local code by a qualified electrician.
