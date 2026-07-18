@@ -1,177 +1,76 @@
-# Home Assistant Shop Ventilation Controller
+# Home Assistant Shop Ventilation
 
-A Home Assistant reference design for a high-ceiling shop nighttime heat-extraction controller using bay-door state, AC/heat state, floor temperature, indoor temperature, ceiling temperature, outdoor temperature, outdoor humidity, and fail-off control logic.
+Documentation, working configuration, and field results from a Home Assistant-controlled nighttime heat-extraction system built for a high-ceiling shop.
 
-The project treats the shop as a thermal-mass problem, not a comfort thermostat. The goal is to remove useful stored heat from the building mass when outside air has a clear advantage, while avoiding daylight solar gain, occupied AC operation, and unnecessary fan runtime when the shop passively equalizes on its own.
+The system uses a powered intake damper, a separate extraction blower, local environmental sensors, and conservative fail-off logic to remove stored heat when outdoor conditions are favorable. It is a thermal-management experiment, not a comfort thermostat or general HVAC controller.
 
-## Project status
+## Current status
 
-Current field-cycle test: v1 nighttime heat extraction with paired damper/blower control and a simple RH guardrail.
+The July 2026 paired-output configuration is the last working baseline. Both Home Assistant automations are currently disabled while the system is under review.
 
-The active Home Assistant implementation is treated as ground truth. This repository tracks the currently deployed `Shop Night Heat Extraction` start/stop automations rather than older disabled/retained automations still present locally for posterity.
+The repository preserves that known-good configuration for inspection, testing, and eventual re-enablement. Disabled does not mean obsolete: these files represent the configuration that produced the documented field run.
 
-The July 2026 occupied/manual-cycle data pull changed the active model from floor-only damper control to paired active extraction. The current automation remains intentionally simple: nighttime only, bay closed, AC/heat off, outdoor air meaningfully cooler than the shop, and outdoor RH below 85%.
+## Control model
 
-## Active versus reference YAML
+During the overnight window, the start automation periodically checks that the bay is closed, AC/heat is off, outdoor humidity is acceptable, and outdoor air is sufficiently cooler than at least one shop thermal reference. When those conditions are met, the damper and blower run as a pair.
 
-The active field-cycle implementation is:
+The stop automation turns both outputs off at sunrise, when AC/heat starts, when the bay opens, when outdoor relative humidity reaches 85%, or when useful temperature advantage has been lost across the floor, indoor, and ceiling references.
 
-```text
-home-assistant/shop-night-purge.yaml
-```
+Detailed behavior and thresholds are documented in [`docs/night-purge-process.md`](docs/night-purge-process.md).
 
-Despite the retained filename, this file now contains the v1 `Shop Night Heat Extraction` start and stop automations. It is the current field-cycle ground truth.
+## Working baseline
 
-The package file below is a non-active starter/reference package and should not be loaded alongside the active field-cycle automation without reconciling overlapping damper/blower control, helper entities, thresholds, and sequencing assumptions:
+- [Start automation](home-assistant/automations/shop-night-heat-extraction-start.yaml)
+- [Stop automation](home-assistant/automations/shop-night-heat-extraction-stop.yaml)
+- [Home Assistant baseline notes](home-assistant/README.md)
 
-```text
-home-assistant/packages/shop_ventilation.yaml
-```
+The files are separate Home Assistant UI automation exports and should be imported as two separate automations.
 
-When documentation conflicts with the active implementation, treat `home-assistant/shop-night-purge.yaml` as ground truth for the current cycle.
+## Physical system
 
-## Current behavior
+- `switch.damper_switch` controls the powered intake shutter and its small aperture fan.
+- `switch.blower_switch` controls the larger extraction blower.
+- The July 2026 baseline operates both outputs together as the active extraction pair.
+- Loss of power closes the spring-return intake shutter and stops airflow equipment.
 
-The active extraction pair may start only when all of the following are true:
+Physical installation details are recorded in [`docs/damper-install.md`](docs/damper-install.md).
 
-- Time is after sunset plus 20 minutes and before sunrise.
-- AC/heat switch is off.
-- Bay door is closed.
-- Damper or blower is off.
-- Outdoor relative humidity is below 85%.
-- Outdoor air has useful cooling value against floor, indoor, or ceiling temperature.
+## Field result
 
-Temperature start rule:
+The first clean long automated paired-extraction run lasted 7.35 hours and used an estimated 1.63 kWh. During the run:
 
-```text
-outdoor <= floor - 3°F
-OR outdoor <= indoor - 3°F
-OR outdoor <= ceiling - 5°F
-```
+- Indoor temperature fell 6.3°F.
+- Ceiling temperature fell 6.5°F.
+- Floor temperature fell 3.8°F.
+- The automation stopped when outdoor RH reached 85.3%.
 
-When those conditions are met:
+See [`data/field-runs/2026-07-12-night-extraction-good-run.md`](data/field-runs/2026-07-12-night-extraction-good-run.md) for the reduced field evidence.
+
+## Repository contents
 
 ```text
-damper on
-blower on
+home-assistant/    Last working Home Assistant automation baseline
+docs/              Control, entity, and physical-install documentation
+data/              Reduced field-run evidence
 ```
 
-The automation evaluates the start case at sunset plus 20 minutes, every 20 minutes overnight, and when either controlled output is turned off. This lets it repair mismatched active states such as damper on / blower off.
+Key documents:
 
-An active extraction run stops if any of the following are true:
+- [`docs/night-purge-process.md`](docs/night-purge-process.md): baseline operating model and thresholds.
+- [`docs/entity-map.md`](docs/entity-map.md): Home Assistant entities used by the baseline.
+- [`docs/damper-install.md`](docs/damper-install.md): physical intake shutter and fan installation.
 
-- Sunrise occurs.
-- AC/heat switch turns on.
-- Bay door opens.
-- Outdoor relative humidity reaches the 85% cutoff.
-- Outdoor air no longer has useful cooling advantage across floor, indoor, and ceiling references.
+## Non-goals
 
-Temperature stop rule:
-
-```text
-outdoor >= floor - 1°F
-AND outdoor >= indoor - 1.5°F
-AND outdoor >= ceiling - 2.5°F
-```
-
-When stop conditions are met:
-
-```text
-damper off
-blower off
-```
-
-There is no maximum runtime in this cycle. If conditions remain favorable all night, the system may run all night. If the shop equalizes passively and conditions never justify the blower, non-operation is a valid successful outcome.
-
-## Field observations captured in this cycle
-
-- Closed shop plus AC protects the occupied-zone dry bubble even while the upper layer remains very hot.
-- Turning AC off for meeting noise allows the occupied-zone comfort bubble to collapse quickly on hot-soaked days.
-- Blower plus damper provides useful nighttime heat extraction when there is a real outdoor temperature advantage and the shop is closed enough to create directed airflow.
-- Damper-only operation is weak and should not be treated as active extraction.
-- Rear-window opening can passively lower the upper layer, but it does not replace active extraction when indoor/ceiling air remains meaningfully warmer than outdoor air.
-- Door-open plus blower/damper can provide useful purge when there is a real air path, but daytime openings fight AC and solar gain.
-- Closed-shop passive equalization can collapse ceiling stratification after the shop is shut down.
-- The current v1 automation exists to catch nights when the shop would otherwise wake up hot despite cool outside air.
-
-## Hardware baseline
-
-The control logic is Home Assistant entity based and relay agnostic. It does not assume Shelly hardware.
-
-Active v1 outputs:
-
-- Powered damper controlled by Home Assistant as `switch.damper_switch`.
-- Blower controlled by Home Assistant as `switch.blower_switch`.
-- Physical damper/fan build details are documented in `docs/damper-install.md`.
-
-Input entities used by v1:
-
-- AC/heat occupancy/control switch:
-  - `switch.ac_heat_switch_switch`
-- Bay door opening sensor:
-  - `binary_sensor.bay_door_opening`
-- Outdoor temperature and humidity sensors:
-  - `sensor.outdoor_thermometer_temperature`
-  - `sensor.outdoor_thermometer_humidity`
-- Floor temperature sensor:
-  - `sensor.floor_thermometer_temperature`
-- Indoor temperature sensor:
-  - `sensor.indoor_thermometer_temperature`
-- Ceiling temperature sensor:
-  - `sensor.ceiling_thermometer_temperature`
-
-Observed but not active v1 control inputs:
-
-- Rear window opening sensors:
-  - `binary_sensor.back_left_window_opening`
-  - `binary_sensor.back_right_window_opening`
-- Standard side-door opening sensor:
-  - `binary_sensor.door_opening`
-- Humidity sensors not used for active control:
-  - `sensor.indoor_thermometer_humidity`
-  - `sensor.ceiling_thermometer_humidity`
-  - `sensor.floor_thermometer_humidity`
-
-## Repository layout
-
-```text
-docs/              Current process, entity, installation, safety, and field-test documentation
-home-assistant/    Home Assistant automation YAML
-data/              Bench-test, field-run, and power-profile data
-scripts/           Small analysis helpers
-photos/            Bench-test and installation photos or placeholders
-```
-
-## Current implementation
-
-- `home-assistant/shop-night-purge.yaml` contains the active v1 field-cycle automations mirrored from Home Assistant.
-- `docs/night-purge-process.md` documents the current operating model, boundaries, visual flow map, and accepted edge cases.
-- `docs/entity-map.md` records the Home Assistant entity IDs used by the automation.
-- `docs/damper-install.md` documents the physical shutter, fan, wall penetration, smart-plug control, and fail-closed behavior of the damper/fan subsystem.
-- `docs/2026-06-30-heatwave-test.md` records the current heatwave test intent and deferred work.
-- `home-assistant/packages/shop_ventilation.yaml` is a non-active starter/reference package and is not current field-cycle ground truth.
-
-## Field run artifacts
-
-- `data/field-runs/2026-07-12-night-extraction-good-run.md` records the first clean long automated paired damper/blower run: 7.35 hours, 1.63 kWh estimated energy, -6.3°F indoor, -6.5°F ceiling, -3.8°F floor, and a humidity stop at 85.3% outdoor RH.
-
-The YAML file is written as Home Assistant automation definitions. If importing into the Automation UI, paste the start and stop automations separately.
-
-## Current non-goals
-
-- Do not run as an occupied comfort thermostat.
-- Do not use blower-only or separate blower modes.
-- Do not automate window operation.
-- Do not automatically close or open windows.
-- Do not automatically decide that the shop needs AC.
-- Do not add dew-point calculation until the simple RH-guarded paired-extraction test has been observed.
-- Do not add occupancy/motion logic until sensors are integrated.
-- Do not assume a specific relay/switch vendor.
-- Do not document disabled legacy local automations as current behavior.
+- Occupied comfort thermostat control.
+- Automatic window operation.
+- Automatic AC decisions.
+- Dew-point control in the preserved baseline.
+- Occupancy or motion logic.
 
 ## Safety boundary
 
-This repository documents architecture, control logic, sensor placement, and Home Assistant implementation. It is not an electrical wiring guide. Mains-voltage work should be designed, installed, and verified according to local code by a qualified electrician.
+This repository documents control logic, sensor use, physical installation, and observed results. It is not an electrical wiring guide. Mains-voltage work should be designed, installed, and verified according to local code by a qualified electrician.
 
 ## License
 
