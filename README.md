@@ -83,13 +83,23 @@ The first clean long paired-extraction run occurred overnight on July 12-13, 202
 
 The run maintained damper on, blower on, AC/heat off, and bay closed for the full interval. Rear windows were open and did not prevent useful extraction. The run started because indoor and ceiling air had sufficient temperature advantage even though the older floor-only rule would not yet have triggered.
 
+The complete hourly trace, control-state validation, humidity changes, power breakdown, and interpretation are preserved in the [July 12-13 field report](docs/2026-07-12-night-extraction-run.md).
+
+## Field lessons
+
+A cool, dry occupied-zone bubble can coexist with a much hotter ceiling layer. When AC is turned off, the work area can rebound quickly because the roof, shell, slab, and upper air remain heat-loaded.
+
+Blower or outside-air operation is not automatically useful merely because the ceiling is hot. During warm, humid occupied conditions, forced airflow can raise work-area humidity without materially controlling the upper heat reservoir. The damper/blower pair is therefore intended for unoccupied periods when outdoor air has useful thermal value and the moisture tradeoff is acceptable.
+
+Evening storms and cooldowns can provide useful temperature reduction while carrying high moisture. Temperature benefit and humidity cost must be evaluated together.
+
 ## Blower power sample
 
 The flat [`blower-power-profile-summary.csv`](blower-power-profile-summary.csv) file preserves the small observed steady-state sample: 1.8-1.9 A, 180-192 W, and 60 Hz. Smart-plug history may not capture first-cycle motor inrush.
 
 ## Sensor placement
 
-The outdoor sensor should represent shaded air available to the intake. The indoor sensor should represent normal working height and avoid direct AC or blower discharge. The ceiling sensor should measure the upper heat reservoir rather than roof or wall surface temperature.
+The outdoor sensor should represent shaded air available to the intake. The indoor sensor should represent normal working height and avoid direct AC or blower discharge. The ceiling sensor should measure the upper heat reservoir rather than roof or wall surface temperature and should not sit directly in the blower jet.
 
 ## Repository layout
 
@@ -99,6 +109,7 @@ LICENSE
 blower-power-profile-summary.csv
 docs/
   damper-install.md
+  2026-07-12-night-extraction-run.md
 home-assistant/
   shop-night-heat-extraction-start.yaml
   shop-night-heat-extraction-stop.yaml
