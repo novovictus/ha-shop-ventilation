@@ -20,7 +20,7 @@ These are separate Home Assistant UI automation exports and should be imported s
 - The baseline operates both outputs together as one extraction pair.
 - Loss of power stops both fans and allows the spring-return shutter to close.
 
-The shutter was installed in a framed 12 x 12-inch wall opening with aluminum trim, weather sealant, and galvanized hardware cloth protecting the exterior aperture.
+The shutter was installed in a framed 12 x 12-inch wall opening with aluminum trim, weather sealant, and galvanized hardware cloth protecting the exterior aperture. Detailed construction, mounting, sealing, component, and fail-state information is preserved in the [damper installation engineering note](docs/damper-install.md).
 
 ## Baseline control model
 
@@ -97,6 +97,8 @@ The outdoor sensor should represent shaded air available to the intake. The indo
 README.md
 LICENSE
 blower-power-profile-summary.csv
+docs/
+  damper-install.md
 home-assistant/
   shop-night-heat-extraction-start.yaml
   shop-night-heat-extraction-stop.yaml
