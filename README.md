@@ -22,13 +22,13 @@ home-assistant/shop-night-purge.yaml
 
 Despite the retained filename, this file now contains the v1 `Shop Night Heat Extraction` start and stop automations. It is the current field-cycle ground truth.
 
-The package file below is a non-active architectural/starter reference and should not be loaded alongside the active field-cycle automation without reconciling overlapping damper/blower control, helper entities, thresholds, and sequencing assumptions:
+The package file below is a non-active starter/reference package and should not be loaded alongside the active field-cycle automation without reconciling overlapping damper/blower control, helper entities, thresholds, and sequencing assumptions:
 
 ```text
 home-assistant/packages/shop_ventilation.yaml
 ```
 
-During field testing, the active automation may intentionally differ from older architecture, package, or state-machine notes. When there is a conflict, treat `home-assistant/shop-night-purge.yaml` as ground truth for the current cycle.
+When documentation conflicts with the active implementation, treat `home-assistant/shop-night-purge.yaml` as ground truth for the current cycle.
 
 ## Current behavior
 
@@ -135,12 +135,11 @@ Observed but not active v1 control inputs:
 ## Repository layout
 
 ```text
-docs/              Design notes, process documentation, entity map, physical install notes
+docs/              Current process, entity, installation, safety, and field-test documentation
 home-assistant/    Home Assistant automation YAML
-data/              Bench-test and power-profile data
+data/              Bench-test, field-run, and power-profile data
 scripts/           Small analysis helpers
-site/              Website/article draft material
-photos/            Placeholders for bench-test and installation photos
+photos/            Bench-test and installation photos or placeholders
 ```
 
 ## Current implementation
