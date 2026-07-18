@@ -1,6 +1,12 @@
 # Entity Map
 
-Current v1 active entities:
+## Status
+
+These entities belong to the July 2026 working baseline. The corresponding Home Assistant automations are currently disabled while the system is under review.
+
+## Baseline control entities
+
+Inputs:
 
 - `switch.ac_heat_switch_switch`
 - `binary_sensor.bay_door_opening`
@@ -9,10 +15,13 @@ Current v1 active entities:
 - `sensor.floor_thermometer_temperature`
 - `sensor.indoor_thermometer_temperature`
 - `sensor.ceiling_thermometer_temperature`
+
+Outputs:
+
 - `switch.damper_switch`
 - `switch.blower_switch`
 
-Observed but not active in v1:
+## Observed but not used for baseline control
 
 - `binary_sensor.back_left_window_opening`
 - `binary_sensor.back_right_window_opening`
@@ -21,34 +30,24 @@ Observed but not active in v1:
 - `sensor.ceiling_thermometer_humidity`
 - `sensor.floor_thermometer_humidity`
 
-Current v1 thresholds:
+## Baseline thresholds
 
-- Start opportunity: outdoor temperature has useful cooling value against at least one shop thermal reference:
-  - `outdoor <= floor - 3°F`
-  - `outdoor <= indoor - 3°F`
-  - `outdoor <= ceiling - 5°F`
-- Stop opportunity: useful cooling advantage is basically gone across the shop:
-  - `outdoor >= floor - 1°F`
-  - `outdoor >= indoor - 1.5°F`
-  - `outdoor >= ceiling - 2.5°F`
-- Humidity guardrail: outdoor relative humidity below 85% allows start; 85% or higher stops or blocks.
+Start is allowed when outdoor temperature has useful cooling value against at least one thermal reference:
 
-Historical prefix notes:
+```text
+outdoor <= floor - 3°F
+OR outdoor <= indoor - 3°F
+OR outdoor <= ceiling - 5°F
+```
 
-- `computers` -> `bench`
-- `fridge_wall` -> `blower`
-- `back_wall` -> `damper`
-- `outdoor_temperature` -> `outdoor_thermometer`
-- `shop_ceiling_thermometer` -> `ceiling_thermometer`
-- `shop_floor` -> `floor_thermometer`
-- `shop_door_window` -> `back_right_window`
-- `shop_far_window` -> `back_left_window`
+Stop occurs when useful cooling advantage is gone across all three references:
 
-Notes:
+```text
+outdoor >= floor - 1°F
+AND outdoor >= indoor - 1.5°F
+AND outdoor >= ceiling - 2.5°F
+```
 
-- Active v1 output is now the paired extraction set: `switch.damper_switch` and `switch.blower_switch`.
-- The start automation repairs mismatched active states such as damper on / blower off.
-- The stop automation turns both outputs off and also cleans up mismatched active states.
-- Rear window sensors remain observational only. Open windows are treated as a manual/passive ventilation state, not as an automation gate.
-- Floor, indoor, and ceiling temperature sensors are all active thermal references after the July 2026 occupied/manual-cycle data pull.
-- Dew point logic is still deferred; v1 continues using outdoor RH as a crude guardrail.
+Outdoor RH below 85% allows start. Outdoor RH at or above 85% blocks or stops extraction.
+
+Detailed behavior is documented in [`night-purge-process.md`](night-purge-process.md).
